@@ -66,7 +66,7 @@
     if (pass === MANUAL_PASSWORD) {
         // Hardcoded global configuration since backend is removed
         const config = {
-            footerLogo: "logo.png",
+            footerLogo: "https://www.campfly.in/assets/logo-cropped.png",
             bkName: "Campfly Private Limited",
             bkAcc: "0010 0501 5266",
             bkIfsc: "ICIC0000010",
