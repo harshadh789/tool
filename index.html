@@ -202,8 +202,9 @@ Sightseeing as per itinerary</textarea></div>
       <div class="form-group"><label>Exclusions (One per line)</label><textarea id="i_exc" rows="4" oninput="triggerUpdate()">Airfare and visa charges
 Tips to the guide or driver
 Travel insurance</textarea></div>
-      <div class="form-group"><label>Terms & Conditions (One per line)</label><textarea id="i_terms" rows="4" oninput="triggerUpdate()">Booking & Payment: Reservations confirmed only after receiving required payment.
-Check-in & Check-out: Standard check-in is 14:00 hours and check-out is 12:00 hours.</textarea></div>
+      <div class="form-group"><label>Terms & Conditions (One per line)</label><textarea id="i_terms" rows="5" oninput="triggerUpdate()">Booking & Payment: Reservations confirmed only after receiving required payment.
+Check-in & Check-out: Standard check-in is 14:00 hours and check-out is 12:00 hours.
+Important: Please carry original ID proofs for all passengers during travel.</textarea></div>
     </div>
   </div>
 
@@ -429,7 +430,7 @@ Check-in & Check-out: Standard check-in is 14:00 hours and check-out is 12:00 ho
 <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore-compat.js"></script>
 
 <!-- Global Loader Overlay -->
-<div id="loader-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.9); z-index:9999; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+<div id="loader-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.9); z-index:9999; flex-direction:column; align-items:center; justify-content:center;">
   <i class="fa-solid fa-plane-departure fa-spin" style="font-size:40px; color:var(--theme-color);"></i>
   <p style="margin-top:15px; font-weight:600; color:var(--theme-dark);" id="loader-text">Loading Itinerary...</p>
 </div>

@@ -136,6 +136,13 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
     // Hide advance QR too
     const advanceQrContainer = document.getElementById('advance-qr-container');
     if(advanceQrContainer) advanceQrContainer.style.display = isVoucher ? 'none' : (document.getElementById('i_qr_amount_toggle').checked ? 'block' : 'none');
+    
+    // Aesthetic changes
+    const pdfContainer = document.getElementById('pdf-container');
+    if (pdfContainer) {
+        if (isVoucher) pdfContainer.classList.add('voucher-theme');
+        else pdfContainer.classList.remove('voucher-theme');
+    }
   }
 
   // --- SMART FINANCIALS & DATES LOGIC ---

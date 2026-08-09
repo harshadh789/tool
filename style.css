@@ -67,7 +67,14 @@
     .content-wrapper { padding: 40px; }
 
     .hero-banner { background-size: cover; background-position: center; height: 280px; position: relative; color: white; display: flex; flex-direction: column; justify-content: flex-end; padding: 35px 40px; }
-    .hero-overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0.1)); }
+    .hero-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: linear-gradient(to right, rgba(0, 96, 96, 0.9), rgba(0, 96, 96, 0.4));
+    }
+    .voucher-theme .hero-overlay {
+      background: linear-gradient(to right, rgba(22, 101, 52, 0.95), rgba(22, 101, 52, 0.6));
+    }
     .hero-content { position: relative; z-index: 1; }
     .hero-title { font-size: 36px; font-weight: 900; margin: 0 0 8px 0; letter-spacing: 0.5px; }
     .hero-subtitle { font-size: 18px; margin: 0; opacity: 0.9; font-weight: 500; }
