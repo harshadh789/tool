@@ -1,3 +1,17 @@
+const firebaseConfig = {
+  apiKey: "AIzaSyDYS-NHTF_6SkzKfCibLqKCv0o902mYkxA",
+  authDomain: "tool-59ad5.firebaseapp.com",
+  projectId: "tool-59ad5",
+  storageBucket: "tool-59ad5.firebasestorage.app",
+  messagingSenderId: "983173291653",
+  appId: "1:983173291653:web:7c9dbd041fe7792eda93ec",
+  measurementId: "G-3FE7DLEF3F"
+};
+if (typeof firebase !== 'undefined') {
+  firebase.initializeApp(firebaseConfig);
+}
+const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
+
 
   let dayCount = 0; 
   let hotelCount = 0;
@@ -510,6 +524,81 @@
     return JSON.parse(localStorage.getItem('campfly_pro_v8')) || [];
   }
 
+  async function saveToCloud() {
+    const btn = document.getElementById('btn_save_cloud');
+    if (!btn) return;
+    const ogText = btn.innerHTML;
+    
+    const quoteId = getVal('i_quote').trim();
+    if (!quoteId) {
+       alert("Please enter a Quotation Number.");
+       return;
+    }
+
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+    btn.disabled = true;
+    saveGlobals(); 
+
+    const itinerary = {
+      id: quoteId,
+      genDate: getVal('i_gen_date'), validDate: getVal('i_valid_date'),
+      repName: getVal('i_rep_name'), repTagline: getVal('i_rep_tagline'), repAvatar: getVal('i_rep_avatar'),
+      repPhone: getVal('i_rep_phone'), repEmail: getVal('i_rep_email'), address: getVal('i_address'),
+      socWeb: getVal('i_social_web'), socIg: getVal('i_social_ig'), socYt: getVal('i_social_yt'),
+      guest: getVal('i_guest'), adults: getVal('i_adults'), heroImg: getVal('i_hero_img'),
+      title: getVal('i_title'), duration: getVal('i_duration'), start: getVal('i_start'), end: getVal('i_end'),
+      
+      currency: getVal('i_currency'), costType: getVal('i_cost_type'), 
+      baseCost: getVal('i_base_cost'), discount: getVal('i_discount'), gstPct: getVal('i_gst_pct'),
+      advAmount: getVal('i_adv_amount'), advDate: getVal('i_adv_date'), balDate: getVal('i_bal_date'),
+      qrToggle: document.getElementById('i_qr_amount_toggle').checked,
+      
+      inc: getVal('i_inc'), exc: getVal('i_exc'), terms: getVal('i_terms'),
+      hotels: [], days: []
+    };
+
+    document.querySelectorAll('.hotel-input-group').forEach(block => {
+        const id = block.getAttribute('data-id');
+        itinerary.hotels.push({
+            label: getVal(`i_h${id}_label`), nights: getVal(`i_h${id}_nights`), name: getVal(`i_h${id}_name`),
+            star: getVal(`i_h${id}_star`), room: getVal(`i_h${id}_room`),
+            meals: {
+                b: document.getElementById(`cb_b_${id}`) ? document.getElementById(`cb_b_${id}`).checked : false,
+                l: document.getElementById(`cb_l_${id}`) ? document.getElementById(`cb_l_${id}`).checked : false,
+                d: document.getElementById(`cb_d_${id}`) ? document.getElementById(`cb_d_${id}`).checked : false,
+                bvr: document.getElementById(`cb_bvr_${id}`) ? document.getElementById(`cb_bvr_${id}`).checked : false,
+                ep: document.getElementById(`cb_ep_${id}`) ? document.getElementById(`cb_ep_${id}`).checked : false
+            }
+        });
+    });
+
+    document.querySelectorAll('.day-input-group').forEach(block => {
+        const id = block.getAttribute('data-id');
+        itinerary.days.push({
+            img: getVal(`i_d${id}_img`), title: getVal(`i_d${id}_title`),
+            date: getVal(`i_d${id}_date`), desc: getVal(`i_d${id}_desc`)
+        });
+    });
+
+    try {
+        if (!db) throw new Error("Firebase DB not initialized.");
+        await db.collection("itineraries").doc(quoteId).set(itinerary);
+        const link = window.location.origin + window.location.pathname + "?id=" + quoteId;
+        
+        navigator.clipboard.writeText(link).then(() => {
+            alert("Success! Itinerary saved to cloud.\\n\\nShareable Link copied to clipboard:\\n" + link);
+        }).catch(err => {
+            alert("Success! Link: " + link);
+        });
+    } catch (e) {
+        console.error("Error saving to cloud: ", e);
+        alert("Error saving to cloud. See console.");
+    } finally {
+        btn.innerHTML = ogText;
+        btn.disabled = false;
+    }
+  }
+
   function saveItinerary() {
     const quoteId = getVal('i_quote').trim();
     if (!quoteId) return alert("Please enter a Quotation Number.");
@@ -677,4 +766,72 @@
     addHotel(); addDay(); renderHistory();
   }
 
-  init();
+  function loadItineraryFromData(data) {
+    if(!data) return;
+    
+    document.getElementById('i_quote').value = data.id || '';
+    document.getElementById('i_gen_date').value = data.genDate || '';
+    document.getElementById('i_valid_date').value = data.validDate || '';
+
+    const setIfExist = (id, val) => { if(val !== undefined && document.getElementById(id)) document.getElementById(id).value = val; };
+    
+    setIfExist('i_rep_name', data.repName); setIfExist('i_rep_tagline', data.repTagline); setIfExist('i_rep_avatar', data.repAvatar);
+    setIfExist('i_rep_phone', data.repPhone); setIfExist('i_rep_email', data.repEmail); setIfExist('i_address', data.address);
+    setIfExist('i_social_web', data.socWeb); setIfExist('i_social_ig', data.socIg); setIfExist('i_social_yt', data.socYt);
+
+    setIfExist('i_guest', data.guest); setIfExist('i_adults', data.adults); setIfExist('i_hero_img', data.heroImg);
+    setIfExist('i_title', data.title); setIfExist('i_duration', data.duration); setIfExist('i_start', data.start); setIfExist('i_end', data.end);
+    
+    setIfExist('i_currency', data.currency); setIfExist('i_cost_type', data.costType);
+    setIfExist('i_base_cost', data.baseCost); setIfExist('i_discount', data.discount); setIfExist('i_gst_pct', data.gstPct);
+    setIfExist('i_adv_amount', data.advAmount); setIfExist('i_adv_date', data.advDate); setIfExist('i_bal_date', data.balDate);
+    if(data.qrToggle !== undefined && document.getElementById('i_qr_amount_toggle')) document.getElementById('i_qr_amount_toggle').checked = data.qrToggle;
+    
+    setIfExist('i_inc', data.inc); setIfExist('i_exc', data.exc); setIfExist('i_terms', data.terms);
+
+    document.getElementById('hotels-form-container').innerHTML = '';
+    document.getElementById('hotels-preview-container').innerHTML = '';
+    hotelCount = 0;
+    if(data.hotels && data.hotels.length > 0) data.hotels.forEach(h => addHotel(h)); else addHotel();
+
+    document.getElementById('days-form-container').innerHTML = '';
+    document.getElementById('itinerary-preview-container').innerHTML = '';
+    dayCount = 0;
+    if(data.days && data.days.length > 0) data.days.forEach(d => addDay(d)); else addDay();
+
+    calcFinancials();
+    triggerUpdate();
+  }
+
+  async function boot() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const cloudId = urlParams.get('id');
+
+    if (cloudId) {
+        // Client Mode
+        document.body.classList.add('client-view');
+        document.getElementById('auth-overlay').style.display = 'none';
+        const loader = document.getElementById('loader-overlay');
+        if(loader) loader.style.display = 'flex';
+
+        try {
+            if(!db) throw new Error("Firebase DB not initialized.");
+            const docRef = await db.collection("itineraries").doc(cloudId).get();
+            if (docRef.exists) {
+                loadItineraryFromData(docRef.data());
+            } else {
+                alert("Itinerary not found or link has expired.");
+            }
+        } catch (e) {
+            console.error("Error fetching from cloud:", e);
+            alert("Error loading itinerary from cloud.");
+        } finally {
+            if(loader) loader.style.display = 'none';
+        }
+    } else {
+        // Agent Mode
+        init();
+    }
+  }
+
+  boot();

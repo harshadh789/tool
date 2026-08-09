@@ -49,7 +49,8 @@
   </h2>
   
   <div class="btn-group">
-    <button class="btn btn-secondary" onclick="saveItinerary()"><i class="fa-regular fa-floppy-disk"></i> Save Draft</button>
+    <button class="btn btn-secondary" onclick="saveItinerary()" id="btn_save_draft"><i class="fa-regular fa-floppy-disk"></i> Save Draft (Local)</button>
+    <button class="btn" style="background: var(--theme-accent); color: #fff;" onclick="saveToCloud()" id="btn_save_cloud"><i class="fa-solid fa-cloud-arrow-up"></i> Save to Cloud & Get Link</button>
     <button class="btn" onclick="generatePDF()"><i class="fa-solid fa-file-arrow-down"></i> Download Infinite PDF</button>
   </div>
 
@@ -386,7 +387,16 @@ Check-in & Check-out: Standard check-in is 14:00 hours and check-out is 12:00 ho
   </div>
 </div>
 
+<!-- Firebase App (the core Firebase SDK) is always required and must be listed first -->
+<script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-app-compat.js"></script>
+<!-- Add SDKs for Firebase products that you want to use -->
+<script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore-compat.js"></script>
 
+<!-- Global Loader Overlay -->
+<div id="loader-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.9); z-index:9999; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+  <i class="fa-solid fa-plane-departure fa-spin" style="font-size:40px; color:var(--theme-color);"></i>
+  <p style="margin-top:15px; font-weight:600; color:var(--theme-dark);" id="loader-text">Loading Itinerary...</p>
+</div>
 
 <script src="script.js"></script>
 </body>

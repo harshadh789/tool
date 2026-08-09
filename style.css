@@ -301,4 +301,11 @@
       padding: 10px;
       border-radius: 8px;
     }
-  
+    
+    /* Client View Mode */
+    body.client-view .editor-panel { display: none !important; }
+    body.client-view .preview-panel { width: 100% !important; background: var(--bg-gray); padding: 20px; }
+    @media (max-width: 900px) {
+        body.client-view .preview-panel { padding: 0; }
+        body.client-view .pdf-document { transform: scale(0.9); transform-origin: top center; margin-bottom: -10%; }
+    }
