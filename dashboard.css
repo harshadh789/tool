@@ -202,3 +202,59 @@ tr:hover { background: #f8fafc; }
   cursor: pointer; padding: 5px; margin-right: 10px; transition: color 0.2s;
 }
 .action-btn:hover { color: var(--theme-color); }
+
+/* Responsive UX Improvements */
+@media (max-width: 1024px) {
+  .stats-cards {
+    flex-wrap: wrap;
+  }
+  .card {
+    min-width: 250px;
+  }
+}
+
+@media (max-width: 768px) {
+  body {
+    flex-direction: column;
+  }
+  .sidebar {
+    width: 100%;
+    height: auto;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+  }
+  .brand {
+    padding: 10px 0;
+    border: none;
+  }
+  .nav-links, .user-profile {
+    display: none; /* Hide nav and profile on very small screens for now, or implement a hamburger menu */
+  }
+  
+  .top-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+    padding: 20px;
+  }
+  .search-bar {
+    width: 100%;
+  }
+  .stats-cards {
+    padding: 20px;
+    flex-direction: column;
+  }
+  .table-container {
+    margin: 0 20px 20px 20px;
+    padding: 15px;
+    overflow-x: auto; /* Enable horizontal scroll for table */
+  }
+  .table-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+}
+

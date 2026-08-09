@@ -92,9 +92,11 @@ function renderTable(searchTerm = "") {
         
         let actions = ``;
         if (isVoucher) {
+            actions += `<button class="action-btn" title="Edit" onclick="window.open('index.html?edit=${it.docId}', '_blank')"><i class="fa-solid fa-pen"></i></button>`;
             actions += `<button class="action-btn" title="View Voucher" onclick="window.open('index.html?voucher=${it.docId}', '_blank')"><i class="fa-solid fa-eye"></i></button>`;
             actions += `<button class="action-btn" title="Copy Client Link" onclick="copyToClipboard('index.html?voucher=${it.docId}')"><i class="fa-solid fa-link"></i></button>`;
         } else {
+            actions += `<button class="action-btn" title="Edit" onclick="window.open('index.html?edit=${it.docId}', '_blank')"><i class="fa-solid fa-pen"></i></button>`;
             actions += `<button class="action-btn" title="View Itinerary" onclick="window.open('index.html?id=${it.docId}', '_blank')"><i class="fa-solid fa-eye"></i></button>`;
             actions += `<button class="action-btn" title="Copy Client Link" onclick="copyToClipboard('index.html?id=${it.docId}')"><i class="fa-solid fa-link"></i></button>`;
         }

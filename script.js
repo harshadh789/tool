@@ -122,8 +122,13 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
 
     // Preview UI updates
     const titleEl = document.getElementById('o_title');
-    if (titleEl && isVoucher) {
-        titleEl.innerText = "Confirmed Booking Voucher";
+    if (titleEl) {
+        if (isVoucher) {
+            titleEl.innerText = "Confirmed Booking Voucher";
+        } else {
+            const inputTitle = document.getElementById('i_title').value;
+            titleEl.innerText = inputTitle ? inputTitle : "Proposed Itinerary";
+        }
     }
     
     document.getElementById('o_voucher_transport').style.display = isVoucher ? 'block' : 'none';
@@ -897,12 +902,19 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
     const urlParams = new URLSearchParams(window.location.search);
     const cloudId = urlParams.get('id');
     const voucherId = urlParams.get('voucher');
-    const activeId = cloudId || voucherId;
+    const editId = urlParams.get('edit');
+    const activeId = cloudId || voucherId || editId;
 
     if (activeId) {
-        // Client Mode
-        document.body.classList.add('client-view');
-        document.getElementById('auth-overlay').style.display = 'none';
+        if (!editId) {
+            // Client Mode (Read Only)
+            document.body.classList.add('client-view');
+            document.getElementById('auth-overlay').style.display = 'none';
+        } else {
+            // Edit Mode (Load into editor)
+            init(); // still initialize local draft so we can overwrite it
+        }
+
         const loader = document.getElementById('loader-overlay');
         if(loader) loader.style.display = 'flex';
 
@@ -925,7 +937,7 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
             if(loader) loader.style.display = 'none';
         }
     } else {
-        // Agent Mode
+        // Normal Agent Mode (Load draft)
         init();
     }
   }
