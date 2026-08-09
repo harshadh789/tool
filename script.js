@@ -109,6 +109,35 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
     loadSecureConfig();
   }
 
+  // --- VOUCHER MODE LOGIC ---
+  function toggleVoucherMode() {
+    const isVoucher = document.getElementById('i_voucher_mode').checked;
+    
+    // Editor UI updates
+    document.querySelectorAll('.voucher-field').forEach(el => {
+        el.style.display = isVoucher ? 'block' : 'none';
+    });
+    const pricingAccordion = document.getElementById('pricing-accordion');
+    if (pricingAccordion) pricingAccordion.style.display = isVoucher ? 'none' : 'block';
+
+    // Preview UI updates
+    const titleEl = document.getElementById('o_title');
+    if (titleEl && isVoucher) {
+        titleEl.innerText = "Confirmed Booking Voucher";
+    }
+    
+    document.getElementById('o_voucher_transport').style.display = isVoucher ? 'block' : 'none';
+    const paymentBox = document.querySelector('.payment-box');
+    if (paymentBox) paymentBox.style.display = isVoucher ? 'none' : 'block';
+    
+    const qrContainer = document.querySelector('.qr-container');
+    if (qrContainer) qrContainer.style.display = isVoucher ? 'none' : 'block';
+    
+    // Hide advance QR too
+    const advanceQrContainer = document.getElementById('advance-qr-container');
+    if(advanceQrContainer) advanceQrContainer.style.display = isVoucher ? 'none' : (document.getElementById('i_qr_amount_toggle').checked ? 'block' : 'none');
+  }
+
   // --- SMART FINANCIALS & DATES LOGIC ---
   function calcFinancials() {
     const base = getNum('i_base_cost');
@@ -206,6 +235,7 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
           </div>
           <div class="form-group" style="flex:1;"><label>Room Type</label><input type="text" id="i_h${id}_room" placeholder="Deluxe Room" oninput="triggerUpdate()"></div>
         </div>
+        <div class="form-group voucher-field" style="display:none; background:#f0fdf4; padding:8px; border-radius:5px;"><label style="color:#166534;"><i class="fa-solid fa-bed"></i> Booking Conf No (Voucher Only)</label><input type="text" id="i_h${id}_conf" placeholder="e.g. HDFC-12345" oninput="triggerUpdate()"></div>
         <div class="form-group"><label>Meal Plan</label>
           <div style="display:flex; gap:12px; font-size:13px; margin-top:8px; font-weight:500; flex-wrap:wrap;">
             <label><input type="checkbox" id="cb_b_${id}" checked onchange="triggerUpdate()"> B</label>
@@ -229,6 +259,9 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
         <div>
           <strong class="hotel-name" id="o_h${id}_name"></strong>
           <span class="room-type">Room Type: <span id="o_h${id}_room"></span></span>
+          <div id="o_h${id}_conf_container" style="display:none; margin-top:5px; font-size:12px; font-weight:600; color:#166534;">
+            <i class="fa-solid fa-check-circle"></i> Conf No: <span id="o_h${id}_conf"></span>
+          </div>
         </div>
       </div>
     `;
@@ -240,6 +273,7 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
       document.getElementById(`i_h${id}_name`).value = data.name || '';
       document.getElementById(`i_h${id}_star`).value = data.star || '4 star';
       document.getElementById(`i_h${id}_room`).value = data.room || '';
+      if(document.getElementById(`i_h${id}_conf`)) document.getElementById(`i_h${id}_conf`).value = data.conf || '';
       if(data.meals) {
           document.getElementById(`cb_b_${id}`).checked = data.meals.b;
           document.getElementById(`cb_l_${id}`).checked = data.meals.l;
@@ -328,7 +362,17 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
             });
         }
 
-        setText('o_title', getVal('i_title'));
+        const isVoucher = document.getElementById('i_voucher_mode').checked;
+        setText('o_title', isVoucher ? "Confirmed Booking Voucher" : getVal('i_title'));
+        
+        if (isVoucher) {
+            setText('o_voucher_flights', getVal('i_flights'));
+            setText('o_cab_details', getVal('i_cab_details'));
+            setText('o_driver_name', getVal('i_driver_name'));
+            setText('o_driver_phone', getVal('i_driver_phone'));
+            setText('o_pickup_inst', getVal('i_pickup_inst'));
+        }
+
         setText('o_duration', getVal('i_duration'));
         setText('o_duration_2', getVal('i_duration').split(' / ')[0]);
         
@@ -429,6 +473,18 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
             const starCap = star ? star.charAt(0).toUpperCase() + star.slice(1) : '';
             setText(`o_h${id}_name`, getVal(`i_h${id}_name`) + (starCap ? ` (${starCap})` : ''));
             setText(`o_h${id}_room`, getVal(`i_h${id}_room`));
+            
+            const isVoucher = document.getElementById('i_voucher_mode').checked;
+            const confContainer = document.getElementById(`o_h${id}_conf_container`);
+            const confVal = getVal(`i_h${id}_conf`);
+            if(confContainer) {
+                if(isVoucher && confVal) {
+                    confContainer.style.display = 'block';
+                    setText(`o_h${id}_conf`, confVal);
+                } else {
+                    confContainer.style.display = 'none';
+                }
+            }
             
             let meals = [];
             if(document.getElementById(`cb_b_${id}`) && document.getElementById(`cb_b_${id}`).checked) meals.push("B");
@@ -553,6 +609,11 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
       advAmount: getVal('i_adv_amount'), advDate: getVal('i_adv_date'), balDate: getVal('i_bal_date'),
       qrToggle: document.getElementById('i_qr_amount_toggle').checked,
       
+      // Voucher specific
+      isVoucherMode: document.getElementById('i_voucher_mode').checked,
+      flights: getVal('i_flights'), cabDetails: getVal('i_cab_details'),
+      driverName: getVal('i_driver_name'), driverPhone: getVal('i_driver_phone'), pickupInst: getVal('i_pickup_inst'),
+
       inc: getVal('i_inc'), exc: getVal('i_exc'), terms: getVal('i_terms'),
       hotels: [], days: []
     };
@@ -561,7 +622,7 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
         const id = block.getAttribute('data-id');
         itinerary.hotels.push({
             label: getVal(`i_h${id}_label`), nights: getVal(`i_h${id}_nights`), name: getVal(`i_h${id}_name`),
-            star: getVal(`i_h${id}_star`), room: getVal(`i_h${id}_room`),
+            star: getVal(`i_h${id}_star`), room: getVal(`i_h${id}_room`), conf: getVal(`i_h${id}_conf`),
             meals: {
                 b: document.getElementById(`cb_b_${id}`) ? document.getElementById(`cb_b_${id}`).checked : false,
                 l: document.getElementById(`cb_l_${id}`) ? document.getElementById(`cb_l_${id}`).checked : false,
@@ -583,10 +644,13 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
     try {
         if (!db) throw new Error("Firebase DB not initialized.");
         await db.collection("itineraries").doc(quoteId).set(itinerary);
-        const link = window.location.origin + window.location.pathname + "?id=" + quoteId;
+        let link = window.location.origin + window.location.pathname + "?id=" + quoteId;
+        if(itinerary.isVoucherMode) {
+            link = window.location.origin + window.location.pathname + "?voucher=" + quoteId;
+        }
         
         navigator.clipboard.writeText(link).then(() => {
-            alert("Success! Itinerary saved to cloud.\\n\\nShareable Link copied to clipboard:\\n" + link);
+            alert("Success! Data saved to cloud.\\n\\nShareable Link copied to clipboard:\\n" + link);
         }).catch(err => {
             alert("Success! Link: " + link);
         });
@@ -619,6 +683,11 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
       advAmount: getVal('i_adv_amount'), advDate: getVal('i_adv_date'), balDate: getVal('i_bal_date'),
       qrToggle: document.getElementById('i_qr_amount_toggle').checked,
       
+      // Voucher specific
+      isVoucherMode: document.getElementById('i_voucher_mode').checked,
+      flights: getVal('i_flights'), cabDetails: getVal('i_cab_details'),
+      driverName: getVal('i_driver_name'), driverPhone: getVal('i_driver_phone'), pickupInst: getVal('i_pickup_inst'),
+
       inc: getVal('i_inc'), exc: getVal('i_exc'), terms: getVal('i_terms'),
       hotels: [], days: []
     };
@@ -627,7 +696,7 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
         const id = block.getAttribute('data-id');
         itinerary.hotels.push({
             label: getVal(`i_h${id}_label`), nights: getVal(`i_h${id}_nights`), name: getVal(`i_h${id}_name`),
-            star: getVal(`i_h${id}_star`), room: getVal(`i_h${id}_room`),
+            star: getVal(`i_h${id}_star`), room: getVal(`i_h${id}_room`), conf: getVal(`i_h${id}_conf`),
             meals: {
                 b: document.getElementById(`cb_b_${id}`) ? document.getElementById(`cb_b_${id}`).checked : false,
                 l: document.getElementById(`cb_l_${id}`) ? document.getElementById(`cb_l_${id}`).checked : false,
@@ -689,6 +758,13 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
     if(data.qrToggle !== undefined && document.getElementById('i_qr_amount_toggle')) document.getElementById('i_qr_amount_toggle').checked = data.qrToggle;
     
     setIfExist('i_inc', data.inc); setIfExist('i_exc', data.exc); setIfExist('i_terms', data.terms);
+
+    // Voucher specifics
+    if(data.isVoucherMode !== undefined && document.getElementById('i_voucher_mode')) document.getElementById('i_voucher_mode').checked = data.isVoucherMode;
+    setIfExist('i_flights', data.flights); setIfExist('i_cab_details', data.cabDetails);
+    setIfExist('i_driver_name', data.driverName); setIfExist('i_driver_phone', data.driverPhone); setIfExist('i_pickup_inst', data.pickupInst);
+    
+    toggleVoucherMode();
 
     document.getElementById('hotels-form-container').innerHTML = '';
     document.getElementById('hotels-preview-container').innerHTML = '';
@@ -789,6 +865,13 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
     
     setIfExist('i_inc', data.inc); setIfExist('i_exc', data.exc); setIfExist('i_terms', data.terms);
 
+    // Voucher specifics
+    if(data.isVoucherMode !== undefined && document.getElementById('i_voucher_mode')) document.getElementById('i_voucher_mode').checked = data.isVoucherMode;
+    setIfExist('i_flights', data.flights); setIfExist('i_cab_details', data.cabDetails);
+    setIfExist('i_driver_name', data.driverName); setIfExist('i_driver_phone', data.driverPhone); setIfExist('i_pickup_inst', data.pickupInst);
+    
+    toggleVoucherMode();
+
     document.getElementById('hotels-form-container').innerHTML = '';
     document.getElementById('hotels-preview-container').innerHTML = '';
     hotelCount = 0;
@@ -806,8 +889,10 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
   async function boot() {
     const urlParams = new URLSearchParams(window.location.search);
     const cloudId = urlParams.get('id');
+    const voucherId = urlParams.get('voucher');
+    const activeId = cloudId || voucherId;
 
-    if (cloudId) {
+    if (activeId) {
         // Client Mode
         document.body.classList.add('client-view');
         document.getElementById('auth-overlay').style.display = 'none';
@@ -816,9 +901,13 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
 
         try {
             if(!db) throw new Error("Firebase DB not initialized.");
-            const docRef = await db.collection("itineraries").doc(cloudId).get();
+            const docRef = await db.collection("itineraries").doc(activeId).get();
             if (docRef.exists) {
-                loadItineraryFromData(docRef.data());
+                const data = docRef.data();
+                if (voucherId) {
+                    data.isVoucherMode = true; // force voucher mode for ?voucher param
+                }
+                loadItineraryFromData(data);
             } else {
                 alert("Itinerary not found or link has expired.");
             }

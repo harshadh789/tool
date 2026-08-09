@@ -48,6 +48,14 @@
     <i class="fa-solid fa-plane-departure"></i> Campfly Itinerary Tool
   </h2>
   
+  <div class="mode-toggle" style="background:var(--theme-light); padding:10px; border-radius:8px; display:flex; align-items:center; margin-bottom:15px; border:1px solid var(--theme-color);">
+    <label class="toggle-switch" style="position:relative; display:inline-block; width:40px; height:20px;">
+      <input type="checkbox" id="i_voucher_mode" onchange="toggleVoucherMode(); triggerUpdate();" style="opacity:0; width:0; height:0;">
+      <span class="slider round" style="position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background-color:#ccc; transition:.4s; border-radius:20px;"></span>
+    </label>
+    <span style="font-weight:700; margin-left:10px; font-size:14px; color:var(--theme-dark);">Enable Voucher Mode</span>
+  </div>
+  
   <div class="btn-group">
     <button class="btn btn-secondary" onclick="saveItinerary()" id="btn_save_draft"><i class="fa-regular fa-floppy-disk"></i> Save Draft (Local)</button>
     <button class="btn" style="background: var(--theme-accent); color: #fff;" onclick="saveToCloud()" id="btn_save_cloud"><i class="fa-solid fa-cloud-arrow-up"></i> Save to Cloud & Get Link</button>
@@ -98,13 +106,16 @@
       </div>
       <div class="form-group"><label>Duration (Auto-calculated)</label><input type="text" id="i_duration" value="6 Nights / 7 Days" oninput="triggerUpdate()"></div>
       
+      <div class="voucher-field form-group" style="display:none; background:#f0fdf4; padding:10px; border-radius:8px; border:1px dashed #166534;"><label style="color:#166534;"><i class="fa-solid fa-plane"></i> Flight Details & PNRs (Voucher Only)</label><textarea id="i_flights" rows="2" placeholder="e.g., Indigo 6E-123 (DEL -> DXB) - PNR: X78Y9Z" oninput="triggerUpdate()"></textarea></div>
+
+
       <input type="hidden" id="i_gen_date">
       <input type="hidden" id="i_valid_date">
     </div>
   </div>
   
   <!-- Accordion 1B: Pricing & Financials -->
-  <div class="accordion">
+  <div class="accordion" id="pricing-accordion">
     <div class="accordion-header" onclick="toggleAccordion(this)">2. Pricing & Payment Schedule <span><i class="fa-solid fa-chevron-down"></i></span></div>
     <div class="accordion-content">
       <div style="display:flex; gap:10px;">
@@ -168,7 +179,20 @@
     </div>
   </div>
 
-  <!-- Accordion 4: Policies & Payment -->
+  <!-- Accordion 4B: Driver Details -->
+  <div class="accordion voucher-field" style="display:none; border-left: 4px solid #166534;">
+    <div class="accordion-header" onclick="toggleAccordion(this)" style="color:#166534;">
+      <i class="fa-solid fa-car"></i> 4B. Driver & Transport Details (Voucher) <span><i class="fa-solid fa-chevron-down"></i></span>
+    </div>
+    <div class="accordion-content">
+      <div class="form-group"><label>Vehicle Details (e.g. Innova Crysta)</label><input type="text" id="i_cab_details" oninput="triggerUpdate()"></div>
+      <div class="form-group"><label>Driver Name</label><input type="text" id="i_driver_name" oninput="triggerUpdate()"></div>
+      <div class="form-group"><label>Driver Phone Number</label><input type="text" id="i_driver_phone" oninput="triggerUpdate()"></div>
+      <div class="form-group"><label>Pickup Instructions</label><input type="text" id="i_pickup_inst" placeholder="e.g. Driver will wait at Gate 2 with placard" oninput="triggerUpdate()"></div>
+    </div>
+  </div>
+
+  <!-- Accordion 5: Policies & Payment -->
   <div class="accordion">
     <div class="accordion-header" onclick="toggleAccordion(this)">5. Policies & Terms <span><i class="fa-solid fa-chevron-down"></i></span></div>
     <div class="accordion-content">
@@ -206,6 +230,18 @@ Check-in & Check-out: Standard check-in is 14:00 hours and check-out is 12:00 ho
 
     <div class="content-wrapper">
       
+      <!-- Voucher Only: Transport & Flights Details -->
+      <div id="o_voucher_transport" class="voucher-preview-field" style="display:none; background:#f0fdf4; border: 1px solid #166534; padding:15px; border-radius:8px; margin-bottom:15px;">
+        <h4 style="margin:0 0 10px 0; color:#166534;"><i class="fa-solid fa-car"></i> Transport & Driver Details</h4>
+        <div id="o_voucher_flights" style="font-size:13px; margin-bottom:8px; white-space:pre-wrap; font-weight:600;"></div>
+        <table style="width:100%; font-size:13px;">
+            <tr><td style="width:30%; font-weight:600; color:#166534;">Vehicle</td><td>: <span id="o_cab_details"></span></td></tr>
+            <tr><td style="font-weight:600; color:#166534;">Driver Name</td><td>: <span id="o_driver_name"></span></td></tr>
+            <tr><td style="font-weight:600; color:#166534;">Contact</td><td>: <span id="o_driver_phone"></span></td></tr>
+            <tr><td style="font-weight:600; color:#166534;">Instructions</td><td>: <span id="o_pickup_inst"></span></td></tr>
+        </table>
+      </div>
+
       <!-- Greeting & QR -->
       <div class="intro-header">
         <div class="intro-text">
