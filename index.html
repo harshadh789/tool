@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Campfly Itinerary Tool - Enterprise Secure</title>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- STRICT LOGIN OVERLAY WALL -->
+<div id="auth-overlay" class="auth-overlay">
+  <div class="auth-card">
+    <div class="auth-icon-container">
+        <i class="fa-solid fa-plane-departure auth-icon-float"></i>
+    </div>
+    <h2 class="auth-title">Campfly Portal</h2>
+    <p class="auth-subtitle">Authorized Staff Access Only</p>
+    
+    <div class="auth-input-group">
+      <label>Employee ID</label>
+      <input type="text" id="login_user" placeholder="e.g. emp1">
+    </div>
+    
+    <div class="auth-input-group">
+      <label>Password</label>
+      <input type="password" id="login_pass" placeholder="••••••••">
+    </div>
+    
+    <button class="auth-btn" onclick="handleLogin()">
+      Authenticate & Unlock <i class="fa-solid fa-arrow-right"></i>
+    </button>
+    <p id="login_error" class="auth-error"></p>
+  </div>
+</div>
+
+<div id="toast">Notification</div>
+
+<!-- LEFT: Data Entry Form -->
+<div class="editor-panel">
+  <h2 class="brand">
+    <i class="fa-solid fa-plane-departure"></i> Campfly Itinerary Tool
+  </h2>
+  
+  <div class="btn-group">
+    <button class="btn btn-secondary" onclick="saveItinerary()"><i class="fa-regular fa-floppy-disk"></i> Save Draft</button>
+    <button class="btn" onclick="generatePDF()"><i class="fa-solid fa-file-arrow-down"></i> Download Infinite PDF</button>
+  </div>
+
+  <!-- Accordion 0: Global Settings -->
+  <div class="accordion">
+    <div class="accordion-header" onclick="toggleAccordion(this)">0. Global Agency Settings <span><i class="fa-solid fa-chevron-down"></i></span></div>
+    <div class="accordion-content">
+      <p style="font-size:12px; color:var(--text-muted); margin-top:0;">These settings are fetched securely from server configuration.</p>
+      
+      <div class="form-group"><label>Footer Logo URL <i class="fa-solid fa-lock lock-icon"></i></label><input type="text" id="i_footer_logo" class="locked-field" readonly></div>
+      <div class="form-group"><label>Salesman Name</label><input type="text" id="i_rep_name" value="Muhammad Harshad" oninput="saveGlobals(); triggerUpdate()"></div>
+      <div class="form-group"><label>Salesman Tagline</label><input type="text" id="i_rep_tagline" value="I have curated 5000+ Trips through Campfly networks worldwide." oninput="saveGlobals(); triggerUpdate()"></div>
+      <div class="form-group"><label>Avatar Image URL (Optional)</label><input type="text" id="i_rep_avatar" placeholder="Paste image link here" oninput="saveGlobals(); triggerUpdate()"></div>
+      <div style="display:flex; gap:10px;">
+        <div class="form-group" style="flex:1;"><label>Contact Number</label><input type="text" id="i_rep_phone" value="+91 98765 43210" oninput="saveGlobals(); triggerUpdate()"></div>
+        <div class="form-group" style="flex:1;"><label>Email ID</label><input type="text" id="i_rep_email" value="harshad@campfly.in" oninput="saveGlobals(); triggerUpdate()"></div>
+      </div>
+      <hr style="margin: 15px 0; border: 0; border-top: 1px solid #ccc;">
+      <div class="form-group"><label>Footer Address</label><input type="text" id="i_address" value="Campfly Private Limited, Sjrra 104, Palarivattom, Ernakulam, Kerala 682025" oninput="saveGlobals(); triggerUpdate()"></div>
+      <div class="form-group"><label>Website URL</label><input type="text" id="i_social_web" value="www.campfly.in" oninput="saveGlobals(); triggerUpdate()"></div>
+      <div class="form-group"><label>Instagram Handle</label><input type="text" id="i_social_ig" value="@campfly" oninput="saveGlobals(); triggerUpdate()"></div>
+      <div class="form-group"><label>YouTube Handle</label><input type="text" id="i_social_yt" value="/campfly" oninput="saveGlobals(); triggerUpdate()"></div>
+      <hr style="margin: 15px 0; border: 0; border-top: 1px solid #ccc;">
+      <h4 style="margin:0 0 10px 0; color:var(--theme-color);">Global Bank Details (Locked)</h4>
+      <div class="form-group"><label>A/c Name <i class="fa-solid fa-lock lock-icon"></i></label><input type="text" id="i_bk_name" class="locked-field" readonly></div>
+      <div class="form-group"><label>A/c No <i class="fa-solid fa-lock lock-icon"></i></label><input type="text" id="i_bk_acc" class="locked-field" readonly></div>
+      <div class="form-group"><label>IFSC Code <i class="fa-solid fa-lock lock-icon"></i></label><input type="text" id="i_bk_ifsc" class="locked-field" readonly></div>
+      <div class="form-group"><label>UPI ID <i class="fa-solid fa-lock lock-icon"></i></label><input type="text" id="i_bk_upi" class="locked-field" readonly></div>
+    </div>
+  </div>
+
+  <!-- Accordion 1: Trip Overview -->
+  <div class="accordion">
+    <div class="accordion-header" onclick="toggleAccordion(this)">1. Trip Overview <span><i class="fa-solid fa-chevron-up"></i></span></div>
+    <div class="accordion-content active">
+      <div class="form-group"><label>Quotation Number (Unique ID)</label><input type="text" id="i_quote" oninput="triggerUpdate()"></div>
+      <div class="form-group"><label>Guest Name</label><input type="text" id="i_guest" value="Mr Arham Fahmi" oninput="triggerUpdate()"></div>
+      <div class="form-group"><label>Number of Adults</label><input type="number" id="i_adults" value="2" oninput="calcFinancials(); triggerUpdate()"></div>
+      <div class="form-group"><label>Main Hero Image URL</label><input type="text" id="i_hero_img" value="https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&q=80&w=1000" oninput="triggerUpdate()"></div>
+      <div class="form-group"><label>Trip Title</label><input type="text" id="i_title" value="Explore The Nature of Bali" oninput="triggerUpdate()"></div>
+      
+      <div style="display:flex; gap:10px;">
+        <div class="form-group" style="flex:1;"><label>Start Date</label><input type="date" id="i_start" onchange="calcDuration(); syncStartDay(); triggerUpdate()"></div>
+        <div class="form-group" style="flex:1;"><label>End Date</label><input type="date" id="i_end" onchange="calcDuration(); triggerUpdate()"></div>
+      </div>
+      <div class="form-group"><label>Duration (Auto-calculated)</label><input type="text" id="i_duration" value="6 Nights / 7 Days" oninput="triggerUpdate()"></div>
+      
+      <input type="hidden" id="i_gen_date">
+      <input type="hidden" id="i_valid_date">
+    </div>
+  </div>
+  
+  <!-- Accordion 1B: Pricing & Financials -->
+  <div class="accordion">
+    <div class="accordion-header" onclick="toggleAccordion(this)">2. Pricing & Payment Schedule <span><i class="fa-solid fa-chevron-down"></i></span></div>
+    <div class="accordion-content">
+      <div style="display:flex; gap:10px;">
+        <div class="form-group" style="width: 100px;">
+          <label>Currency</label>
+          <select id="i_currency" onchange="calcFinancials(); triggerUpdate()">
+            <option value="INR">INR</option><option value="$ USD">$ USD</option><option value="€ EUR">€ EUR</option><option value="AED">AED</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label>Cost Display Text</label>
+          <select id="i_cost_type" onchange="calcFinancials(); triggerUpdate()">
+            <option value="Total Package Cost">Total Package Cost</option><option value="Per Person Cost" selected>Per Person Cost</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="form-group"><label>Base Fare Amount</label><input type="number" id="i_base_cost" value="45000" oninput="calcFinancials(); triggerUpdate()"></div>
+      
+      <div style="display:flex; gap:10px;">
+        <div class="form-group" style="flex:1;"><label>Discount Amount</label><input type="number" id="i_discount" value="2999" oninput="calcFinancials(); triggerUpdate()"></div>
+        <div class="form-group" style="flex:1;"><label>GST %</label><input type="number" id="i_gst_pct" value="18" oninput="calcFinancials(); triggerUpdate()"></div>
+      </div>
+      
+      <div class="form-group"><label>Calculated Grand Total (All Adults)</label><input type="number" id="i_total_cost" readonly></div>
+      <hr style="margin: 15px 0; border: 0; border-top: 1px dashed #ccc;">
+      
+      <div style="display:flex; gap:10px;">
+        <div class="form-group" style="flex:1;"><label>Advance Required</label><input type="number" id="i_adv_amount" value="35000" oninput="calcFinancials(); triggerUpdate()"></div>
+        <div class="form-group" style="flex:1;"><label>Advance Due Date</label><input type="date" id="i_adv_date" value="2026-08-13" onchange="triggerUpdate()"></div>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <div class="form-group" style="flex:1;"><label>Balance Amount (Auto)</label><input type="number" id="i_bal_amount" readonly></div>
+        <div class="form-group" style="flex:1;"><label>Balance Due Date</label><input type="date" id="i_bal_date" value="2026-08-22" onchange="triggerUpdate()"></div>
+      </div>
+      
+      <div class="form-group" style="margin-top:10px;">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="checkbox" id="i_qr_amount_toggle" style="width:16px; height:16px;" checked onchange="triggerUpdate()">
+              Embed Advance Amount in UPI QR Code?
+          </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Accordion 2: Accommodation -->
+  <div class="accordion">
+    <div class="accordion-header" onclick="toggleAccordion(this)">3. Accommodation Options <span><i class="fa-solid fa-chevron-down"></i></span></div>
+    <div class="accordion-content">
+      <div id="hotels-form-container"></div>
+      <button class="btn-outline" onclick="addHotel()"><i class="fa-solid fa-plus"></i> Add Hotel Stay</button>
+    </div>
+  </div>
+
+  <!-- Accordion 3: Itinerary -->
+  <div class="accordion">
+    <div class="accordion-header" onclick="toggleAccordion(this)">4. Daily Itinerary <span><i class="fa-solid fa-chevron-down"></i></span></div>
+    <div class="accordion-content">
+      <div id="days-form-container"></div>
+      <button class="btn-outline" onclick="addDay()"><i class="fa-solid fa-plus"></i> Add Another Day</button>
+    </div>
+  </div>
+
+  <!-- Accordion 4: Policies & Payment -->
+  <div class="accordion">
+    <div class="accordion-header" onclick="toggleAccordion(this)">5. Policies & Terms <span><i class="fa-solid fa-chevron-down"></i></span></div>
+    <div class="accordion-content">
+      <div class="form-group"><label>Inclusions (One per line)</label><textarea id="i_inc" rows="4" oninput="triggerUpdate()">4 Nights stay with Breakfast
+AC private car (for 10 hours)
+Sightseeing as per itinerary</textarea></div>
+      <div class="form-group"><label>Exclusions (One per line)</label><textarea id="i_exc" rows="4" oninput="triggerUpdate()">Airfare and visa charges
+Tips to the guide or driver
+Travel insurance</textarea></div>
+      <div class="form-group"><label>Terms & Conditions (One per line)</label><textarea id="i_terms" rows="4" oninput="triggerUpdate()">Booking & Payment: Reservations confirmed only after receiving required payment.
+Check-in & Check-out: Standard check-in is 14:00 hours and check-out is 12:00 hours.</textarea></div>
+    </div>
+  </div>
+
+  <!-- History Panel -->
+  <div class="history-panel">
+    <h3 style="margin-top:0; color:var(--theme-color);">📂 Saved Itineraries</h3>
+    <div id="history-list"></div>
+  </div>
+</div>
+
+<!-- RIGHT: Live PDF Preview -->
+<div class="preview-panel">
+  <div id="pdf-container" class="pdf-document">
+    
+    <div class="hero-banner" id="o_hero_banner">
+      <div class="hero-overlay"></div>
+      <div class="brand-logo-text">Campfly</div>
+      <div class="top-right-date" id="o_top_right_date"></div>
+      <div class="hero-content">
+        <h1 class="hero-title" id="o_title"></h1>
+        <p class="hero-subtitle" id="o_duration"></p>
+      </div>
+    </div>
+
+    <div class="content-wrapper">
+      
+      <!-- Greeting & QR -->
+      <div class="intro-header">
+        <div class="intro-text">
+          <h4>Hello <strong id="o_guest"></strong>,</h4>
+          <p>Greetings from <strong>Campfly</strong>!<br>Please find the details of your package below,<br>according to your requirements:</p>
+        </div>
+        <div class="qr-container">
+          <div id="o_qr"></div>
+          <div class="qr-label">Scan to Verify</div>
+        </div>
+      </div>
+
+      <!-- Quotation Data -->
+      <div class="quote-box">
+        <h4>Quotation : <span id="o_quote"></span></h4>
+        <table class="quote-table">
+          <tr>
+            <td>Guest Name</td><td>: <span id="o_guest_2"></span></td>
+            <td>Total Adults</td><td>: <span id="o_adults"></span></td>
+          </tr>
+          <tr>
+            <td>Start Date</td><td>: <span id="o_start"></span></td>
+            <td>End Date</td><td>: <span id="o_end"></span></td>
+          </tr>
+          <tr>
+            <td>Tour Duration</td><td>: <span id="o_duration_2"></span></td>
+            <td>Valid Until</td><td>: <span id="o_valid_date"></span></td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- Pricing Box -->
+      <div class="pricing-box">
+        <div class="pricing-label" id="o_cost_label"></div>
+        <h2 class="pricing-total"><span id="o_currency"></span>&nbsp;<span id="o_cost_big"></span></h2>
+      </div>
+
+      <!-- Abbreviations Strip (Updated with B, L, D, BVR, EP) -->
+      <div class="abbrev-strip">
+        <h5>Meal Plan Abbreviations:</h5>
+        <div class="abbrev-grid">
+          <div class="abbrev-chip"><span class="bold">B</span> Breakfast</div>
+          <div class="abbrev-chip"><span class="bold">L</span> Lunch</div>
+          <div class="abbrev-chip"><span class="bold">D</span> Dinner</div>
+          <div class="abbrev-chip"><span class="bold">BVR</span> Beverages</div>
+          <div class="abbrev-chip"><span class="bold">EP</span> Room Only</div>
+        </div>
+      </div>
+
+      <!-- Hotels -->
+      <div id="hotels-preview-container"></div>
+
+      <!-- Detailed Itinerary -->
+      <h2 class="section-title-main">Detailed Itinerary</h2>
+      <div id="itinerary-preview-container"></div>
+
+      <!-- Financial Breakdown Card -->
+      <div class="finance-card">
+          <h3 class="finance-header">Total Package Cost</h3>
+          <table class="finance-table">
+              <tr><td>Base Fare</td><td id="o_f_base"></td></tr>
+              <tr id="tr_f_disc"><td>Discount Applied</td><td id="o_f_disc" style="color:#e11d48;"></td></tr>
+              <tr id="tr_f_gst"><td>Taxes & Fees (GST)</td><td id="o_f_gst"></td></tr>
+              <tr id="tr_f_subtotal" style="display:none;">
+                <td>Subtotal (Per Person)</td><td id="o_f_subtotal"></td>
+              </tr>
+              <tr class="total-row">
+                <td>Total Package Cost <span id="o_f_adults_lbl" style="font-size:14px; font-weight:500; color:var(--text-muted);"></span></td>
+                <td id="o_f_total"></td>
+              </tr>
+          </table>
+          <div style="border-top: 1px solid var(--border-color); margin: 15px 0;"></div>
+          <table class="finance-table">
+              <tr class="adv-row">
+                  <td>
+                      <div style="color:#059669; font-weight:700; margin-bottom:4px;">Advance Payment Required</div>
+                      <div style="font-size:13px; color:var(--text-muted); font-weight:500;" id="o_f_adv_date"></div>
+                  </td>
+                  <td id="o_f_adv" style="font-size:16px; color:#059669;"></td>
+              </tr>
+              <tr class="bal-row">
+                  <td>
+                      <div style="color:var(--text-dark); font-weight:700; margin-bottom:4px;">Balance Payment Due</div>
+                      <div style="font-size:13px; color:var(--text-muted); font-weight:500;" id="o_f_bal_date"></div>
+                  </td>
+                  <td id="o_f_bal" style="font-size:16px; color:var(--text-dark);"></td>
+              </tr>
+          </table>
+      </div>
+
+      <!-- Inclusions / Exclusions -->
+      <h2 class="section-title-main" style="margin-top:40px;">Inclusions/Exclusions</h2>
+      <div class="inc-exc-grid">
+        <div class="inc-card">
+          <h3>Inclusions</h3>
+          <ul id="o_inc_list"></ul>
+        </div>
+        <div class="exc-card">
+          <h3>Exclusions</h3>
+          <ul id="o_exc_list"></ul>
+        </div>
+      </div>
+
+      <!-- Terms -->
+      <div class="terms-box">
+        <h3>Terms and Conditions</h3>
+        <ul class="terms-list" id="o_terms_list"></ul>
+      </div>
+      
+      <!-- Cancellation -->
+      <div>
+        <h3 class="policy-title">PAYMENT POLICY</h3>
+        <table class="cancel-table">
+          <tr><th>PERIOD OF CANCELLATION</th><th>CANCELLATION CHARGES</th></tr>
+          <tr><td>After Booking</td><td>50% Of Fare Charge</td></tr>
+          <tr><td>45-30 Days Prior</td><td>60% Of Fare Charge</td></tr>
+          <tr><td>30-15 Days Prior</td><td>75% Of Fare Charge</td></tr>
+          <tr><td>Less Than 15 Days</td><td>100% Of Fare Charge</td></tr>
+        </table>
+      </div>
+
+      <!-- Bank Card -->
+      <div class="bank-card">
+        <div class="bank-info">
+          <h3>BANK DETAILS</h3>
+          <p><span style="color:rgba(255,255,255,0.8); font-weight:500;">A/c Name:</span> <span class="value" id="o_bk_name"></span></p>
+          <p><span style="color:rgba(255,255,255,0.8); font-weight:500;">A/c No:</span> <span class="value" id="o_bk_acc"></span>
+            <i class="fa-regular fa-copy copy-icon" onclick="copyText('o_bk_acc')" title="Copy Account Number"></i>
+          </p>
+          <p><span style="color:rgba(255,255,255,0.8); font-weight:500;">IFSC:</span> <span class="value" id="o_bk_ifsc"></span>
+            <i class="fa-regular fa-copy copy-icon" onclick="copyText('o_bk_ifsc')" title="Copy IFSC"></i>
+          </p>
+          <p style="margin-top:16px;"><span style="color:rgba(255,255,255,0.8); font-weight:500;">UPI:</span> <span class="value" id="o_bk_upi"></span>
+            <i class="fa-regular fa-copy copy-icon" onclick="copyText('o_bk_upi')" title="Copy UPI ID"></i>
+          </p>
+        </div>
+        <div class="bank-qr-section">
+          <div class="scan-label">SCAN WITH ANY UPI APP</div>
+          <div class="qr-img" id="o_bk_qr" style="background: white; padding: 5px; border-radius: 8px;"></div>
+          <div class="upi-logos">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/f/f2/Google_Pay_Logo.svg" alt="GPay">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/7/71/PhonePe_Logo.svg" alt="PhonePe">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/2/24/Paytm_Logo_%28standalone%29.svg" alt="Paytm">
+          </div>
+        </div>
+      </div>
+
+      <!-- Contact Card -->
+      <div class="contact-card">
+        <i class="fa-solid fa-plane-departure watermark-logo"></i>
+        <div class="contact-avatar">
+          <img id="o_rep_avatar" src="" alt="Agent">
+          <i id="o_rep_icon" class="fa-solid fa-user-tie"></i>
+        </div>
+        <div class="contact-details">
+          <h3>Your Travel Expert</h3>
+          <span class="tagline" id="o_rep_tagline"></span>
+          <p><span id="o_rep_name"></span></p>
+          <div class="info">
+            <span><i class="fa-solid fa-phone" style="color:var(--theme-color);"></i> <span id="o_rep_phone"></span></span> 
+            <span><i class="fa-solid fa-envelope" style="color:var(--theme-color);"></i> <span id="o_rep_email"></span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Footer -->
+    <div class="footer">
+      <img id="o_footer_logo" class="footer-logo" src="" alt="Campfly Logo">
+      
+      <div class="footer-socials">
+        <span><i class="fa-brands fa-instagram"></i> <span id="ot_social_ig"></span></span>
+        <span><i class="fa-solid fa-globe"></i> <span id="ot_social_web"></span></span>
+        <span><i class="fa-brands fa-youtube"></i> <span id="ot_social_yt"></span></span>
+      </div>
+      <div class="o_address_foot"></div>
+    </div>
+    
+  </div>
+</div>
+
+
+
+<script src="script.js"></script>
+</body>
+</html>
