@@ -1,10 +1,10 @@
 
     :root {
-      --theme-color: #1a5e5a; /* Logo Deep Teal */
-      --theme-accent: #f59e0b; /* Logo Yellow/Orange */
+      --theme-color: #006060; /* Official Campfly Teal */
+      --theme-accent: #faaa34; /* Official Campfly Yellow */
       --theme-light: #e0f2fe; 
-      --theme-dark: #0f3d3a;
-      --theme-gradient: linear-gradient(135deg, #1a5e5a, #134e4a);
+      --theme-dark: #004040;
+      --theme-gradient: linear-gradient(135deg, #006060, #004c4c);
       --text-dark: #0f172a;
       --text-muted: #64748b;
       --border-color: #cbd5e1;
