@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Dashboard - Campfly</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <i class="fa-solid fa-plane-departure"></i> Campfly Admin
+    </div>
+    <ul class="nav-links">
+      <li><a href="#" class="active"><i class="fa-solid fa-chart-pie"></i> Overview</a></li>
+      <li><a href="index.html"><i class="fa-solid fa-pen-to-square"></i> New Itinerary</a></li>
+      <li><a href="#"><i class="fa-solid fa-users"></i> Customers</a></li>
+      <li><a href="#"><i class="fa-solid fa-gear"></i> Settings</a></li>
+    </ul>
+    <div class="user-profile">
+      <div class="avatar"><i class="fa-solid fa-user"></i></div>
+      <div class="info">
+        <strong>Admin</strong>
+        <span>admin@campfly.in</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <header class="top-bar">
+      <h2><i class="fa-solid fa-table-list"></i> Centralized Lead & Quote Dashboard</h2>
+      <div class="search-bar">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="text" id="search_input" placeholder="Search by Quote ID, Name...">
+      </div>
+    </header>
+
+    <div class="stats-cards">
+      <div class="card">
+        <div class="card-icon" style="background:#dcfce7; color:#16a34a;"><i class="fa-solid fa-check"></i></div>
+        <div class="card-info">
+          <h3>Total Confirmed Vouchers</h3>
+          <h2 id="stat_vouchers">0</h2>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background:#fef08a; color:#ca8a04;"><i class="fa-solid fa-file-invoice"></i></div>
+        <div class="card-info">
+          <h3>Total Proposed Itineraries</h3>
+          <h2 id="stat_itineraries">0</h2>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background:#bae6fd; color:#0284c7;"><i class="fa-solid fa-users"></i></div>
+        <div class="card-info">
+          <h3>Total Guests</h3>
+          <h2 id="stat_guests">0</h2>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-container">
+      <div class="table-header">
+        <h3>Recent Leads & Quotes</h3>
+        <button class="btn-refresh" onclick="fetchData()"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
+      </div>
+      <table id="quotes_table">
+        <thead>
+          <tr>
+            <th>Quote ID</th>
+            <th>Guest Name</th>
+            <th>Trip Dates</th>
+            <th>Duration</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="table_body">
+          <tr><td colspan="6" style="text-align:center; padding: 30px;"><i class="fa-solid fa-spinner fa-spin"></i> Loading data from Cloud...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore-compat.js"></script>
+  <script src="dashboard.js"></script>
+</body>
+</html>
