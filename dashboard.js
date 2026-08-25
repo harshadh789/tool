@@ -15,12 +15,22 @@ if (typeof firebase !== 'undefined') {
 }
 
 let allItineraries = [];
+let currentTabFilter = 'all';
 
 document.addEventListener("DOMContentLoaded", () => {
     fetchData();
 
     document.getElementById('search_input').addEventListener('input', (e) => {
         renderTable(e.target.value.toLowerCase());
+    });
+    
+    document.querySelectorAll('.filter-tab').forEach(tab => {
+        tab.addEventListener('click', (e) => {
+            document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+            e.target.classList.add('active');
+            currentTabFilter = e.target.getAttribute('data-filter');
+            renderTable(document.getElementById('search_input').value.toLowerCase());
+        });
     });
 });
 
@@ -71,6 +81,11 @@ function renderTable(searchTerm = "") {
     tbody.innerHTML = "";
 
     const filtered = allItineraries.filter(it => {
+        // First check tab filter
+        const derivedStatus = it.isVoucherMode ? 'Voucher' : (it.status || 'Draft');
+        if (currentTabFilter !== 'all' && derivedStatus !== currentTabFilter) return false;
+
+        // Then check search filter
         if (!searchTerm) return true;
         const idMatch = it.id && it.id.toLowerCase().includes(searchTerm);
         const nameMatch = it.guest && it.guest.toLowerCase().includes(searchTerm);
@@ -85,8 +100,22 @@ function renderTable(searchTerm = "") {
 
     filtered.forEach(it => {
         const isVoucher = it.isVoucherMode;
-        const statusClass = isVoucher ? 'status-voucher' : 'status-quote';
-        const statusText = isVoucher ? 'Voucher Generated' : 'Quote Proposed';
+        let statusClass = 'status-draft';
+        let statusText = 'Draft';
+
+        if (isVoucher) {
+            statusClass = 'status-voucher';
+            statusText = 'Voucher Generated';
+        } else if (it.status === 'Requested') {
+            statusClass = 'status-requested';
+            statusText = 'Pending Ops Request';
+        } else if (it.status === 'Draft') {
+            statusClass = 'status-draft';
+            statusText = 'Draft Quote';
+        } else {
+            statusClass = 'status-quote'; // Fallback if no specific status
+            statusText = it.status || 'Quote';
+        }
         
         const tripDates = `${it.start || '?'} to ${it.end || '?'}`;
         

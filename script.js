@@ -18,6 +18,7 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
   let updateTimeout = null;
   let autoSaveTimeout = null;
   let isBooting = false;
+  let currentStatus = 'Draft';
 
   function getVal(id) { const el = document.getElementById(id); return el ? el.value : ''; }
   function getNum(id) { const el = document.getElementById(id); return el ? parseFloat(el.value) || 0 : 0; }
@@ -616,7 +617,7 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
       driverName: getVal('i_driver_name'), driverPhone: getVal('i_driver_phone'), pickupInst: getVal('i_pickup_inst'),
 
       inc: getVal('i_inc'), exc: getVal('i_exc'), terms: getVal('i_terms'),
-      hotels: [], days: [], timestamp: Date.now()
+      hotels: [], days: [], timestamp: Date.now(), status: currentStatus
     };
 
     document.querySelectorAll('.hotel-input-group').forEach(block => {
@@ -699,11 +700,18 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
     saveToCloud(true);
   }
 
+  function requestOps() {
+    currentStatus = 'Requested';
+    saveToCloud(false);
+    showToast("Sent to Ops Team!");
+  }
+
 
   // Local history functions (getSavedItineraries, loadItinerary, deleteItinerary, renderHistory) have been removed in favor of pure Cloud Persistence via the V2 Dashboard.
 
   async function init() {
     isBooting = true;
+    currentStatus = 'Draft';
     loadGlobals();
 
     document.getElementById('i_quote').value = `CMP-2026-001`;
@@ -731,6 +739,7 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
   function loadItineraryFromData(data) {
     if(!data) return;
     isBooting = true;
+    currentStatus = data.status || 'Draft';
     
     document.getElementById('i_quote').value = data.id || '';
     document.getElementById('i_gen_date').value = data.genDate || '';
