@@ -695,26 +695,7 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
     // "Save Draft" now performs a silent cloud save
     saveToCloud(true);
   }
-        if (!db) throw new Error("Firebase DB not initialized.");
-        await db.collection("itineraries").doc(quoteId).set(itinerary);
-        let link = window.location.origin + window.location.pathname + "?id=" + quoteId;
-        if(itinerary.isVoucherMode) {
-            link = window.location.origin + window.location.pathname + "?voucher=" + quoteId;
-        }
-        
-        navigator.clipboard.writeText(link).then(() => {
-            alert("Success! Data saved to cloud.\\n\\nShareable Link copied to clipboard:\\n" + link);
-        }).catch(err => {
-            alert("Success! Link: " + link);
-        });
-    } catch (e) {
-        console.error("Error saving to cloud: ", e);
-        alert("Error saving to cloud. See console.");
-    } finally {
-        btn.innerHTML = ogText;
-        btn.disabled = false;
-    }
-  }
+
 
   // Local history functions (getSavedItineraries, loadItinerary, deleteItinerary, renderHistory) have been removed in favor of pure Cloud Persistence via the V2 Dashboard.
 
