@@ -16,6 +16,7 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
   let dayCount = 0; 
   let hotelCount = 0;
   let updateTimeout = null;
+  let autoSaveTimeout = null;
 
   function getVal(id) { const el = document.getElementById(id); return el ? el.value : ''; }
   function getNum(id) { const el = document.getElementById(id); return el ? parseFloat(el.value) || 0 : 0; }
@@ -60,6 +61,9 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
   function triggerUpdate() {
     clearTimeout(updateTimeout);
     updateTimeout = setTimeout(() => { updatePreview(); }, 150);
+
+    clearTimeout(autoSaveTimeout);
+    autoSaveTimeout = setTimeout(() => { saveToCloud('auto'); }, 2000);
   }
 
   // --- STRICT ACCESS CONTROL LOCK-WALL & CONFIG LOADER ---
@@ -649,7 +653,7 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
        return;
     }
 
-    if(btn) {
+    if(btn && !isSilent) {
         btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
         btn.disabled = true;
     }
@@ -662,7 +666,7 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
         await db.collection("itineraries").doc(quoteId).set(itinerary);
         
         if (isSilent) {
-            showToast("Draft Saved to Cloud!");
+            if (isSilent !== 'auto') showToast("Draft Saved to Cloud!");
             return; // Skip alerts and link generation for silent saves
         }
 
@@ -680,7 +684,7 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
         console.error("Error saving to cloud: ", e);
         if(!isSilent) alert("Error saving to cloud. See console.");
     } finally {
-        if(btn) {
+        if(btn && !isSilent) {
             btn.innerHTML = ogText;
             btn.disabled = false;
         }
