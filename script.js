@@ -592,21 +592,7 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
     return JSON.parse(localStorage.getItem('campfly_pro_v8')) || [];
   }
 
-  async function saveToCloud() {
-    const btn = document.getElementById('btn_save_cloud');
-    if (!btn) return;
-    const ogText = btn.innerHTML;
-    
-    const quoteId = getVal('i_quote').trim();
-    if (!quoteId) {
-       alert("Please enter a Quotation Number.");
-       return;
-    }
-
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
-    btn.disabled = true;
-    saveGlobals(); 
-
+  function getItineraryData(quoteId) {
     const itinerary = {
       id: quoteId,
       genDate: getVal('i_gen_date'), validDate: getVal('i_valid_date'),
@@ -627,7 +613,7 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
       driverName: getVal('i_driver_name'), driverPhone: getVal('i_driver_phone'), pickupInst: getVal('i_pickup_inst'),
 
       inc: getVal('i_inc'), exc: getVal('i_exc'), terms: getVal('i_terms'),
-      hotels: [], days: []
+      hotels: [], days: [], timestamp: Date.now()
     };
 
     document.querySelectorAll('.hotel-input-group').forEach(block => {
@@ -652,6 +638,26 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
             date: getVal(`i_d${id}_date`), desc: getVal(`i_d${id}_desc`)
         });
     });
+
+    return itinerary;
+  }
+
+  async function saveToCloud() {
+    const btn = document.getElementById('btn_save_cloud');
+    if (!btn) return;
+    const ogText = btn.innerHTML;
+    
+    const quoteId = getVal('i_quote').trim();
+    if (!quoteId) {
+       alert("Please enter a Quotation Number.");
+       return;
+    }
+
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+    btn.disabled = true;
+    saveGlobals(); 
+
+    const itinerary = getItineraryData(quoteId);
 
     try {
         if (!db) throw new Error("Firebase DB not initialized.");
@@ -681,51 +687,7 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
 
     saveGlobals(); 
 
-    const itinerary = {
-      id: quoteId,
-      genDate: getVal('i_gen_date'), validDate: getVal('i_valid_date'),
-      repName: getVal('i_rep_name'), repTagline: getVal('i_rep_tagline'), repAvatar: getVal('i_rep_avatar'),
-      repPhone: getVal('i_rep_phone'), repEmail: getVal('i_rep_email'), address: getVal('i_address'),
-      socWeb: getVal('i_social_web'), socIg: getVal('i_social_ig'), socYt: getVal('i_social_yt'),
-      guest: getVal('i_guest'), adults: getVal('i_adults'), heroImg: getVal('i_hero_img'),
-      title: getVal('i_title'), duration: getVal('i_duration'), start: getVal('i_start'), end: getVal('i_end'),
-      
-      currency: getVal('i_currency'), costType: getVal('i_cost_type'), 
-      baseCost: getVal('i_base_cost'), discount: getVal('i_discount'), gstPct: getVal('i_gst_pct'),
-      advAmount: getVal('i_adv_amount'), advDate: getVal('i_adv_date'), balDate: getVal('i_bal_date'),
-      qrToggle: document.getElementById('i_qr_amount_toggle').checked,
-      
-      // Voucher specific
-      isVoucherMode: document.getElementById('i_voucher_mode').checked,
-      flights: getVal('i_flights'), cabDetails: getVal('i_cab_details'),
-      driverName: getVal('i_driver_name'), driverPhone: getVal('i_driver_phone'), pickupInst: getVal('i_pickup_inst'),
-
-      inc: getVal('i_inc'), exc: getVal('i_exc'), terms: getVal('i_terms'),
-      hotels: [], days: []
-    };
-
-    document.querySelectorAll('.hotel-input-group').forEach(block => {
-        const id = block.getAttribute('data-id');
-        itinerary.hotels.push({
-            label: getVal(`i_h${id}_label`), nights: getVal(`i_h${id}_nights`), name: getVal(`i_h${id}_name`),
-            star: getVal(`i_h${id}_star`), room: getVal(`i_h${id}_room`), conf: getVal(`i_h${id}_conf`),
-            meals: {
-                b: document.getElementById(`cb_b_${id}`) ? document.getElementById(`cb_b_${id}`).checked : false,
-                l: document.getElementById(`cb_l_${id}`) ? document.getElementById(`cb_l_${id}`).checked : false,
-                d: document.getElementById(`cb_d_${id}`) ? document.getElementById(`cb_d_${id}`).checked : false,
-                bvr: document.getElementById(`cb_bvr_${id}`) ? document.getElementById(`cb_bvr_${id}`).checked : false,
-                ep: document.getElementById(`cb_ep_${id}`) ? document.getElementById(`cb_ep_${id}`).checked : false
-            }
-        });
-    });
-
-    document.querySelectorAll('.day-input-group').forEach(block => {
-        const id = block.getAttribute('data-id');
-        itinerary.days.push({
-            img: getVal(`i_d${id}_img`), title: getVal(`i_d${id}_title`),
-            date: getVal(`i_d${id}_date`), desc: getVal(`i_d${id}_desc`)
-        });
-    });
+    const itinerary = getItineraryData(quoteId);
 
     let savedList = getSavedItineraries();
     const existingIndex = savedList.findIndex(item => item.id === quoteId);
