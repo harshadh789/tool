@@ -17,6 +17,7 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
   let hotelCount = 0;
   let updateTimeout = null;
   let autoSaveTimeout = null;
+  let isBooting = false;
 
   function getVal(id) { const el = document.getElementById(id); return el ? el.value : ''; }
   function getNum(id) { const el = document.getElementById(id); return el ? parseFloat(el.value) || 0 : 0; }
@@ -62,8 +63,10 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
     clearTimeout(updateTimeout);
     updateTimeout = setTimeout(() => { updatePreview(); }, 150);
 
-    clearTimeout(autoSaveTimeout);
-    autoSaveTimeout = setTimeout(() => { saveToCloud('auto'); }, 2000);
+    if (!isBooting) {
+        clearTimeout(autoSaveTimeout);
+        autoSaveTimeout = setTimeout(() => { saveToCloud('auto'); }, 2000);
+    }
   }
 
   // --- STRICT ACCESS CONTROL LOCK-WALL & CONFIG LOADER ---
@@ -700,6 +703,7 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
   // Local history functions (getSavedItineraries, loadItinerary, deleteItinerary, renderHistory) have been removed in favor of pure Cloud Persistence via the V2 Dashboard.
 
   async function init() {
+    isBooting = true;
     loadGlobals();
 
     document.getElementById('i_quote').value = `CMP-2026-001`;
@@ -720,10 +724,13 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
     
     const historyContainer = document.getElementById('history-list');
     if (historyContainer) historyContainer.innerHTML = `<p style="font-size: 13px; color: #999;">Please use the Dashboard to view and manage your saved itineraries.</p>`;
+    
+    setTimeout(() => { isBooting = false; }, 500); // Allow initial DOM renders to clear before enabling auto-save
   }
 
   function loadItineraryFromData(data) {
     if(!data) return;
+    isBooting = true;
     
     document.getElementById('i_quote').value = data.id || '';
     document.getElementById('i_gen_date').value = data.genDate || '';
@@ -764,6 +771,7 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
 
     calcFinancials();
     triggerUpdate();
+    setTimeout(() => { isBooting = false; }, 500);
   }
 
   async function boot() {
