@@ -332,7 +332,17 @@
     /* Client View Mode */
     body.client-view .editor-panel { display: none !important; }
     body.client-view .preview-panel { width: 100% !important; background: var(--bg-gray); padding: 20px; }
+    
     @media (max-width: 900px) {
         body.client-view .preview-panel { padding: 0; }
-        body.client-view .pdf-document { transform: scale(0.9); transform-origin: top center; margin-bottom: -10%; }
+        body.client-view #pdf-container { width: 100% !important; max-width: 100vw; margin: 0; border-radius: 0; }
+        body.client-view .content-wrapper { padding: 20px; }
+        body.client-view .hero-banner { height: auto; padding: 30px 20px; }
+        body.client-view .hero-title { font-size: 26px; }
+        body.client-view .fin-grid, body.client-view .fin-row, body.client-view .fin-total-row { flex-direction: column; gap: 15px; }
+        body.client-view .day-card { flex-direction: column; }
+        body.client-view .day-card img { width: 100%; height: 200px; }
+        body.client-view .hotel-grid { grid-template-columns: 1fr; }
+        body.client-view .qr-section { flex-direction: column; text-align: center; }
+        body.client-view .footer { flex-direction: column; text-align: center; gap: 15px; padding: 20px; }
     }
