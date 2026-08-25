@@ -588,10 +588,6 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
     });
   }
 
-  function getSavedItineraries() {
-    return JSON.parse(localStorage.getItem('campfly_pro_v8')) || [];
-  }
-
   function getItineraryData(quoteId) {
     const itinerary = {
       id: quoteId,
@@ -642,32 +638,59 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
     return itinerary;
   }
 
-  async function saveToCloud() {
+  async function saveToCloud(isSilent = false) {
     const btn = document.getElementById('btn_save_cloud');
-    if (!btn) return;
-    const ogText = btn.innerHTML;
+    if (!btn && !isSilent) return;
+    const ogText = btn ? btn.innerHTML : '';
     
     const quoteId = getVal('i_quote').trim();
     if (!quoteId) {
-       alert("Please enter a Quotation Number.");
+       if(!isSilent) alert("Please enter a Quotation Number.");
        return;
     }
 
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
-    btn.disabled = true;
+    if(btn) {
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+        btn.disabled = true;
+    }
     saveGlobals(); 
 
     const itinerary = getItineraryData(quoteId);
 
-    // Sync with local draft automatically
-    let savedList = getSavedItineraries();
-    const existingIndex = savedList.findIndex(item => item.id === quoteId);
-    if(existingIndex >= 0) savedList[existingIndex] = itinerary;
-    else savedList.push(itinerary);
-    localStorage.setItem('campfly_pro_v8', JSON.stringify(savedList));
-    renderHistory();
-
     try {
+        if (!db) throw new Error("Firebase DB not initialized.");
+        await db.collection("itineraries").doc(quoteId).set(itinerary);
+        
+        if (isSilent) {
+            showToast("Draft Saved to Cloud!");
+            return; // Skip alerts and link generation for silent saves
+        }
+
+        let link = window.location.origin + window.location.pathname + "?id=" + quoteId;
+        if(itinerary.isVoucherMode) {
+            link = window.location.origin + window.location.pathname + "?voucher=" + quoteId;
+        }
+        
+        navigator.clipboard.writeText(link).then(() => {
+            alert("Success! Data saved to cloud.\n\nShareable Link copied to clipboard:\n" + link);
+        }).catch(err => {
+            alert("Success! Link: " + link);
+        });
+    } catch (e) {
+        console.error("Error saving to cloud: ", e);
+        if(!isSilent) alert("Error saving to cloud. See console.");
+    } finally {
+        if(btn) {
+            btn.innerHTML = ogText;
+            btn.disabled = false;
+        }
+    }
+  }
+
+  function saveItinerary() {
+    // "Save Draft" now performs a silent cloud save
+    saveToCloud(true);
+  }
         if (!db) throw new Error("Firebase DB not initialized.");
         await db.collection("itineraries").doc(quoteId).set(itinerary);
         let link = window.location.origin + window.location.pathname + "?id=" + quoteId;
@@ -689,125 +712,12 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
     }
   }
 
-  function saveItinerary() {
-    const quoteId = getVal('i_quote').trim();
-    if (!quoteId) return alert("Please enter a Quotation Number.");
-
-    saveGlobals(); 
-
-    const itinerary = getItineraryData(quoteId);
-
-    let savedList = getSavedItineraries();
-    const existingIndex = savedList.findIndex(item => item.id === quoteId);
-    if(existingIndex >= 0) savedList[existingIndex] = itinerary;
-    else savedList.push(itinerary);
-
-    localStorage.setItem('campfly_pro_v8', JSON.stringify(savedList));
-    showToast("Itinerary Saved Successfully!");
-    renderHistory();
-  }
-
-  function loadItinerary(quoteId, isDuplicate = false) {
-    const data = getSavedItineraries().find(item => item.id === quoteId);
-    if(!data) return;
-
-    let targetId = data.id;
-    if(isDuplicate) {
-        targetId = generateSubSerial(data.id);
-        document.getElementById('i_quote').value = targetId;
-        
-        const today = new Date(); const valid = new Date(today); valid.setDate(valid.getDate() + 15);
-        document.getElementById('i_gen_date').value = today.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-        document.getElementById('i_valid_date').value = valid.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-    } else {
-        document.getElementById('i_quote').value = targetId;
-        document.getElementById('i_gen_date').value = data.genDate || '';
-        document.getElementById('i_valid_date').value = data.validDate || '';
-    }
-
-    const setIfExist = (id, val) => { if(val !== undefined && document.getElementById(id)) document.getElementById(id).value = val; };
-    
-    setIfExist('i_rep_name', data.repName); setIfExist('i_rep_tagline', data.repTagline); setIfExist('i_rep_avatar', data.repAvatar);
-    setIfExist('i_rep_phone', data.repPhone); setIfExist('i_rep_email', data.repEmail); setIfExist('i_address', data.address);
-    setIfExist('i_social_web', data.socWeb); setIfExist('i_social_ig', data.socIg); setIfExist('i_social_yt', data.socYt);
-
-    setIfExist('i_guest', data.guest); setIfExist('i_adults', data.adults); setIfExist('i_hero_img', data.heroImg);
-    setIfExist('i_title', data.title); setIfExist('i_duration', data.duration); setIfExist('i_start', data.start); setIfExist('i_end', data.end);
-    
-    setIfExist('i_currency', data.currency); setIfExist('i_cost_type', data.costType);
-    setIfExist('i_base_cost', data.baseCost); setIfExist('i_discount', data.discount); setIfExist('i_gst_pct', data.gstPct);
-    setIfExist('i_adv_amount', data.advAmount); setIfExist('i_adv_date', data.advDate); setIfExist('i_bal_date', data.balDate);
-    if(data.qrToggle !== undefined && document.getElementById('i_qr_amount_toggle')) document.getElementById('i_qr_amount_toggle').checked = data.qrToggle;
-    
-    setIfExist('i_inc', data.inc); setIfExist('i_exc', data.exc); setIfExist('i_terms', data.terms);
-
-    // Voucher specifics
-    if(data.isVoucherMode !== undefined && document.getElementById('i_voucher_mode')) document.getElementById('i_voucher_mode').checked = data.isVoucherMode;
-    setIfExist('i_flights', data.flights); setIfExist('i_cab_details', data.cabDetails);
-    setIfExist('i_driver_name', data.driverName); setIfExist('i_driver_phone', data.driverPhone); setIfExist('i_pickup_inst', data.pickupInst);
-    
-    toggleVoucherMode();
-
-    document.getElementById('hotels-form-container').innerHTML = '';
-    document.getElementById('hotels-preview-container').innerHTML = '';
-    hotelCount = 0;
-    if(data.hotels && data.hotels.length > 0) data.hotels.forEach(h => addHotel(h)); else addHotel();
-
-    document.getElementById('days-form-container').innerHTML = '';
-    document.getElementById('itinerary-preview-container').innerHTML = '';
-    dayCount = 0;
-    if(data.days && data.days.length > 0) data.days.forEach(d => addDay(d)); else addDay();
-
-    calcFinancials();
-    triggerUpdate();
-    
-    if(isDuplicate) showToast(`Copied! Sub-serial ID: ${targetId} generated.`);
-    else showToast("Loaded Itinerary: " + quoteId);
-  }
-
-  function deleteItinerary(quoteId) {
-    if(confirm(`Delete quotation ${quoteId}?`)) {
-        let savedList = getSavedItineraries().filter(item => item.id !== quoteId);
-        localStorage.setItem('campfly_pro_v8', JSON.stringify(savedList));
-        renderHistory();
-        showToast("Deleted Successfully!");
-    }
-  }
-
-  function renderHistory() {
-    const savedList = getSavedItineraries();
-    const container = document.getElementById('history-list');
-    container.innerHTML = '';
-    if(savedList.length === 0) {
-        container.innerHTML = `<p style="font-size: 13px; color: #999;">No saved itineraries.</p>`;
-        return;
-    }
-    [...savedList].reverse().forEach(item => {
-        const div = document.createElement('div'); div.className = 'history-item';
-        div.innerHTML = `
-            <div class="history-item-details">
-                <strong>${item.id} - ${item.guest}</strong>
-                <span>${item.title}</span>
-            </div>
-            <div class="history-actions">
-                <button class="btn-load" onclick="loadItinerary('${item.id}')" title="Load"><i class="fa-solid fa-folder-open"></i></button>
-                <button class="btn-dup" onclick="loadItinerary('${item.id}', true)" title="Duplicate"><i class="fa-solid fa-copy"></i></button>
-                <button class="btn-delete" onclick="deleteItinerary('${item.id}')" title="Delete"><i class="fa-solid fa-trash"></i></button>
-            </div>
-        `;
-        container.appendChild(div);
-    });
-  }
+  // Local history functions (getSavedItineraries, loadItinerary, deleteItinerary, renderHistory) have been removed in favor of pure Cloud Persistence via the V2 Dashboard.
 
   async function init() {
     loadGlobals();
 
-    let itins = getSavedItineraries();
-    if(itins.length === 0) {
-        document.getElementById('i_quote').value = `CMP-2026-001`;
-    } else {
-        document.getElementById('i_quote').value = `CMP-2026-${String(itins.length + 1).padStart(3, '0')}`;
-    }
+    document.getElementById('i_quote').value = `CMP-2026-001`;
 
     const today = new Date(); // Dynamic live current date
     const valid = new Date(today); valid.setDate(valid.getDate() + 15); 
@@ -821,7 +731,10 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
     document.getElementById('i_end').value = dEnd.toISOString().split('T')[0];
     
     calcDuration(); calcFinancials();
-    addHotel(); addDay(); renderHistory();
+    addHotel(); addDay(); 
+    
+    const historyContainer = document.getElementById('history-list');
+    if (historyContainer) historyContainer.innerHTML = `<p style="font-size: 13px; color: #999;">Please use the Dashboard to view and manage your saved itineraries.</p>`;
   }
 
   function loadItineraryFromData(data) {
