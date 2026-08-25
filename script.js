@@ -659,6 +659,14 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
 
     const itinerary = getItineraryData(quoteId);
 
+    // Sync with local draft automatically
+    let savedList = getSavedItineraries();
+    const existingIndex = savedList.findIndex(item => item.id === quoteId);
+    if(existingIndex >= 0) savedList[existingIndex] = itinerary;
+    else savedList.push(itinerary);
+    localStorage.setItem('campfly_pro_v8', JSON.stringify(savedList));
+    renderHistory();
+
     try {
         if (!db) throw new Error("Firebase DB not initialized.");
         await db.collection("itineraries").doc(quoteId).set(itinerary);
