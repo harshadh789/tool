@@ -94,10 +94,10 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
         // Hardcoded global configuration since backend is removed
         const config = {
             footerLogo: "https://www.campfly.in/assets/logo-cropped.png",
-            bkName: "Campfly Private Limited",
-            bkAcc: "0010 0501 5266",
-            bkIfsc: "ICIC0000010",
-            bkUpi: "campflyprivatelimited.ibz@icici"
+            bkName: "CAMPFLY TOURS LLP",
+            bkAcc: "10292311723",
+            bkIfsc: "IDFB0080511",
+            bkUpi: "campfly@idfcbank"
         };
         
         document.getElementById('i_footer_logo').value = config.footerLogo;
