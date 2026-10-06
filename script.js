@@ -251,7 +251,7 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
         <div class="form-group"><label>Hotel Name</label><input type="text" id="i_h${id}_name" placeholder="Resort Name" oninput="triggerUpdate()"></div>
         <div style="display:flex; gap:10px;">
           <div class="form-group" style="flex:1;"><label>Star Rating</label>
-            <select id="i_h${id}_star" onchange="triggerUpdate()"><option value="3 star">3 Star</option><option value="4 star" selected>4 Star</option><option value="5 star">5 Star</option></select>
+            <select id="i_h${id}_star" onchange="triggerUpdate()"><option value=""></option><option value="3 star">3 Star</option><option value="4 star">4 Star</option><option value="5 star">5 Star</option></select>
           </div>
           <div class="form-group" style="flex:1;"><label>Room Type</label><input type="text" id="i_h${id}_room" placeholder="Deluxe Room" oninput="triggerUpdate()"></div>
         </div>
@@ -291,7 +291,7 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
       document.getElementById(`i_h${id}_label`).value = data.label || `Hotel ${id}`;
       document.getElementById(`i_h${id}_nights`).value = data.nights || '';
       document.getElementById(`i_h${id}_name`).value = data.name || '';
-      document.getElementById(`i_h${id}_star`).value = data.star || '4 star';
+      document.getElementById(`i_h${id}_star`).value = data.star || '';
       document.getElementById(`i_h${id}_room`).value = data.room || '';
       if(document.getElementById(`i_h${id}_conf`)) document.getElementById(`i_h${id}_conf`).value = data.conf || '';
       if(data.meals) {
@@ -305,7 +305,7 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
       document.getElementById(`i_h1_label`).value = 'Hotel 1 (Ubud - 3 Nights)';
       document.getElementById(`i_h1_nights`).value = 'Day 1 - Day 4 : Ubud';
       document.getElementById(`i_h1_name`).value = 'Kuwarasan A Pramana Experience';
-      document.getElementById(`i_h1_star`).value = '5 star';
+      document.getElementById(`i_h1_star`).value = '';
       document.getElementById(`i_h1_room`).value = 'Suite Pool View';
     }
     triggerUpdate();
