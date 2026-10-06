@@ -1,23 +1,23 @@
 
     :root {
-      --theme-color: #006060; /* Official Campfly Teal */
-      --theme-accent: #faaa34; /* Official Campfly Yellow */
-      --theme-light: #e0f2fe; 
-      --theme-dark: #004040;
-      --theme-gradient: linear-gradient(135deg, #006060, #004c4c);
-      --text-dark: #0f172a;
+      --theme-color: #00877a; 
+      --theme-accent: #00877a; 
+      --theme-light: #e0f2f1; 
+      --theme-dark: #005a51;
+      --theme-gradient: linear-gradient(135deg, #00877a, #006056);
+      --text-dark: #1e293b;
       --text-muted: #64748b;
-      --border-color: #cbd5e1;
+      --border-color: #e2e8f0;
       --bg-gray: #f8fafc;
-      --app-bg: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+      --app-bg: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
     }
     body { font-family: 'Outfit', sans-serif; background: var(--app-bg); margin: 0; padding: 20px; display: flex; gap: 20px; height: 100vh; box-sizing: border-box; }
     
     ::-webkit-scrollbar { width: 8px; }
     ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
     
-    .editor-panel { flex: 1.1; background: rgba(255,255,255,0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); padding: 30px; border-radius: 16px; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.1), inset 0 0 0 1px rgba(255,255,255,0.5); }
-    .preview-panel { flex: 1.3; background: var(--bg-gray); padding: 25px; border-radius: 16px; overflow: auto; box-shadow: inset 0 2px 10px rgba(0,0,0,0.05);}
+    .editor-panel { flex: 1.1; background: white; padding: 35px; border-radius: 12px; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid var(--border-color); }
+    .preview-panel { flex: 1.3; background: white; padding: 30px; border-radius: 12px; overflow: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid var(--border-color); }
     
     h2.brand { color: var(--theme-color); margin-top: 0; display: flex; align-items: center; gap: 10px; font-weight: 900; font-size: 26px;}
     .form-group { margin-bottom: 18px; }
@@ -37,10 +37,10 @@
     .btn-outline { background: transparent; color: var(--theme-color); border: 2px dashed var(--theme-color); margin-top: 10px; width: 100%; padding: 12px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; display: flex; justify-content: center; align-items: center; gap: 8px;}
     .btn-outline:hover { background: var(--theme-light); }
 
-    .accordion { border: 1px solid var(--border-color); border-radius: 10px; margin-bottom: 20px; overflow: hidden; background: white; box-shadow: 0 4px 15px rgba(0,0,0,0.02);}
-    .accordion-header { background: var(--bg-gray); padding: 18px 20px; font-weight: 800; color: var(--theme-color); cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 16px; transition: background 0.25s; }
-    .accordion-header:hover { background: #e2e8f0; }
-    .accordion-content { padding: 25px; display: none; }
+    .accordion { border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 20px; overflow: hidden; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.02);}
+    .accordion-header { background: white; padding: 18px 20px; font-weight: 800; color: var(--theme-color); cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 16px; transition: background 0.25s; border-bottom: 1px solid var(--border-color); }
+    .accordion-header:hover { background: var(--theme-light); }
+    .accordion-content { padding: 25px; display: none; background: var(--bg-gray); }
     .accordion-content.active { display: block; }
     
     .dynamic-box { background: var(--bg-gray); border: 1px solid var(--border-color); padding: 20px; border-radius: 8px; margin-bottom: 15px; position: relative; border-left: 4px solid var(--theme-color); }
