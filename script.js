@@ -51,6 +51,11 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
 
   function formatDisplayDate(dateStr) {
     if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const d = new Date(parts[0], parts[1] - 1, parts[2]);
+      return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
     const d = new Date(dateStr);
     if (isNaN(d)) return dateStr;
     return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -179,41 +184,64 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
   }
 
   function calcDuration() {
-    const start = getVal('i_start');
-    let end = getVal('i_end');
+    const startStr = getVal('i_start');
+    let endStr = getVal('i_end');
     
-    if(start && !end) {
-        const d = new Date(start); d.setDate(d.getDate() + 4); 
-        end = d.toISOString().split('T')[0]; document.getElementById('i_end').value = end;
+    if(startStr && !endStr) {
+        const parts = startStr.split('-');
+        const d1 = new Date(parts[0], parts[1] - 1, parts[2]);
+        d1.setDate(d1.getDate() + 4); 
+        const ey = d1.getFullYear();
+        const em = String(d1.getMonth() + 1).padStart(2, '0');
+        const ed = String(d1.getDate()).padStart(2, '0');
+        endStr = `${ey}-${em}-${ed}`;
+        document.getElementById('i_end').value = endStr;
     }
 
-    if(start && end) {
-      const d1 = new Date(start); const d2 = new Date(end);
-      if(d2 > d1) {
-          const diffDays = Math.ceil(Math.abs(d2 - d1) / (1000 * 60 * 60 * 24)); 
+    if(startStr && endStr) {
+      const p1 = startStr.split('-');
+      const p2 = endStr.split('-');
+      const utc1 = Date.UTC(p1[0], p1[1] - 1, p1[2]);
+      const utc2 = Date.UTC(p2[0], p2[1] - 1, p2[2]);
+      
+      if(utc2 >= utc1) {
+          const diffDays = Math.round((utc2 - utc1) / (1000 * 60 * 60 * 24)); 
           document.getElementById('i_duration').value = `${diffDays} Nights / ${diffDays + 1} Days`;
+          
+          // Auto-sync all itinerary dates sequentially from Start Date
+          const dayBlocks = document.querySelectorAll('.day-input-group');
+          dayBlocks.forEach((block, index) => {
+              const id = block.getAttribute('data-id');
+              const dateInput = document.getElementById(`i_d${id}_date`);
+              if (dateInput) {
+                  const dayDate = new Date(p1[0], p1[1] - 1, p1[2]);
+                  dayDate.setDate(dayDate.getDate() + index);
+                  const dy = dayDate.getFullYear();
+                  const dm = String(dayDate.getMonth() + 1).padStart(2, '0');
+                  const dd = String(dayDate.getDate()).padStart(2, '0');
+                  dateInput.value = `${dy}-${dm}-${dd}`;
+              }
+          });
       }
     }
   }
 
   function syncStartDay() {
-      const start = getVal('i_start');
-      if(start && document.getElementById('i_d1_date')) {
-          document.getElementById('i_d1_date').value = start;
-          triggerUpdate();
-      }
+      // Delegated to calcDuration to auto-sync all days
   }
 
   function getNextDayDate() {
-    if (dayCount === 0) return getVal('i_start');
+    const startStr = getVal('i_start');
+    if (!startStr) return '';
     const dayBlocks = document.querySelectorAll('.day-input-group');
-    if(dayBlocks.length === 0) return getVal('i_start');
-    const lastId = dayBlocks[dayBlocks.length - 1].getAttribute('data-id');
-    const lastDateVal = getVal(`i_d${lastId}_date`);
-    if (!lastDateVal) return '';
-    let d = new Date(lastDateVal);
-    d.setDate(d.getDate() + 1); 
-    return d.toISOString().split('T')[0];
+    const index = dayBlocks.length; 
+    const p = startStr.split('-');
+    const dayDate = new Date(p[0], p[1] - 1, p[2]);
+    dayDate.setDate(dayDate.getDate() + index);
+    const dy = dayDate.getFullYear();
+    const dm = String(dayDate.getMonth() + 1).padStart(2, '0');
+    const dd = String(dayDate.getDate()).padStart(2, '0');
+    return `${dy}-${dm}-${dd}`;
   }
 
   function generateSubSerial(oldId) {
@@ -723,9 +751,16 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
     document.getElementById('i_valid_date').value = valid.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     
     const dStart = new Date(today); dStart.setDate(dStart.getDate() + 1);
-    document.getElementById('i_start').value = dStart.toISOString().split('T')[0];
+    const sy = dStart.getFullYear();
+    const sm = String(dStart.getMonth() + 1).padStart(2, '0');
+    const sd = String(dStart.getDate()).padStart(2, '0');
+    document.getElementById('i_start').value = `${sy}-${sm}-${sd}`;
+    
     const dEnd = new Date(dStart); dEnd.setDate(dEnd.getDate() + 4);
-    document.getElementById('i_end').value = dEnd.toISOString().split('T')[0];
+    const ey = dEnd.getFullYear();
+    const em = String(dEnd.getMonth() + 1).padStart(2, '0');
+    const ed = String(dEnd.getDate()).padStart(2, '0');
+    document.getElementById('i_end').value = `${ey}-${em}-${ed}`;
     
     calcDuration(); calcFinancials();
     addHotel(); addDay(); 
