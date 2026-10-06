@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="style.css?v=2">
+  <link rel="stylesheet" href="style.css?v=999">
 </head>
 <body>
 
@@ -260,20 +260,22 @@ Important: Please carry original ID proofs for all passengers during travel.</te
       <!-- Quotation Data -->
       <div class="quote-box">
         <h4>Quotation : <span id="o_quote"></span></h4>
-        <table class="quote-table">
-          <tr>
-            <td>Guest Name</td><td>: <span id="o_guest_2"></span></td>
-            <td>Total Adults</td><td>: <span id="o_adults"></span></td>
-          </tr>
-          <tr>
-            <td>Start Date</td><td>: <span id="o_start"></span></td>
-            <td>End Date</td><td>: <span id="o_end"></span></td>
-          </tr>
-          <tr>
-            <td>Tour Duration</td><td>: <span id="o_duration_2"></span></td>
-            <td>Valid Until</td><td>: <span id="o_valid_date"></span></td>
-          </tr>
-        </table>
+        <div class="quote-table-wrapper">
+          <table class="quote-table">
+            <tr>
+              <td>Guest Name</td><td>: <span id="o_guest_2"></span></td>
+              <td>Total Adults</td><td>: <span id="o_adults"></span></td>
+            </tr>
+            <tr>
+              <td>Start Date</td><td>: <span id="o_start"></span></td>
+              <td>End Date</td><td>: <span id="o_end"></span></td>
+            </tr>
+            <tr>
+              <td>Tour Duration</td><td>: <span id="o_duration_2"></span></td>
+              <td>Valid Until</td><td>: <span id="o_valid_date"></span></td>
+            </tr>
+          </table>
+        </div>
       </div>
 
       <!-- Pricing Box -->
@@ -437,6 +439,6 @@ Important: Please carry original ID proofs for all passengers during travel.</te
   <p style="margin-top:15px; font-weight:600; color:var(--theme-dark);" id="loader-text">Loading Itinerary...</p>
 </div>
 
-<script src="script.js?v=6"></script>
+<script src="script.js?v=999"></script>
 </body>
 </html>
