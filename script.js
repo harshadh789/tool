@@ -251,7 +251,7 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
         <div class="form-group"><label>Hotel Name</label><input type="text" id="i_h${id}_name" placeholder="Resort Name" oninput="triggerUpdate()"></div>
         <div style="display:flex; gap:10px;">
           <div class="form-group" style="flex:1;"><label>Star Rating</label>
-            <select id="i_h${id}_star" onchange="triggerUpdate()"><option value=""></option><option value="3 star">3 Star</option><option value="4 star">4 Star</option><option value="5 star">5 Star</option></select>
+            <select id="i_h${id}_star" onchange="triggerUpdate()"><option value=""></option><option value="1 star">1 Star</option><option value="2 star">2 Star</option><option value="3 star">3 Star</option><option value="4 star">4 Star</option><option value="5 star">5 Star</option><option value="homestay">Homestay</option><option value="villa">Villa</option></select>
           </div>
           <div class="form-group" style="flex:1;"><label>Room Type</label><input type="text" id="i_h${id}_room" placeholder="Deluxe Room" oninput="triggerUpdate()"></div>
         </div>
