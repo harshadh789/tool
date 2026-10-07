@@ -1,9 +1,10 @@
 {
   "name": "campfly-itinerary",
   "version": "1.0.0",
-  "main": "dashboard.js",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js",
+    "dev": "node server.js"
   },
   "repository": {
     "type": "git",
@@ -12,16 +13,12 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/harshadh789/tool/issues"
-  },
-  "homepage": "https://github.com/harshadh789/tool#readme",
-  "description": "",
+  "description": "Campfly Itinerary Tool",
   "dependencies": {
     "axios": "^1.20.0",
     "cors": "^2.8.6",
     "dotenv": "^18.0.6",
-    "express": "^5.2.1",
+    "express": "^4.21.0",
     "form-data": "^4.0.6"
   }
 }
