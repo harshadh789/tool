@@ -133,7 +133,12 @@ app.post('/api/saveItinerary', async (req, res) => {
         res.json({ success: true, message: 'Itinerary saved successfully.' });
     } catch (error) {
         console.error("Error saving itinerary:", error.response ? error.response.data : error.message);
-        res.status(500).json({ success: false, error: 'Error saving itinerary to Zoho.' });
+        res.status(500).json({ 
+            success: false, 
+            error: 'Error saving itinerary to Zoho.',
+            details: error.response ? error.response.data : error.message,
+            envKeys: Object.keys(process.env).filter(k => k.startsWith('ZOHO_')) 
+        });
     }
 });
 
