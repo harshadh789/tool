@@ -116,24 +116,13 @@ app.post('/api/saveItinerary', async (req, res) => {
         const fileName = `${itinerary.id}.json`;
         const fileContent = Buffer.from(JSON.stringify(itinerary, null, 2));
 
-        // Check if file already exists
-        const existingFile = await findFileByName(token, fileName);
-
+        // Always upload fresh with override — simpler and avoids update-by-id API issues
         const form = new FormData();
         form.append('content', fileContent, { filename: fileName, contentType: 'application/json' });
-        
-        let url;
-        if (existingFile) {
-            // Upload new version
-            url = `${ZOHO_WORKDRIVE_API}/upload?id=${existingFile.id}`;
-        } else {
-            // Create new file
-            form.append('parent_id', ZOHO_WORKDRIVE_FOLDER_ID);
-            form.append('override-name-exist', 'true');
-            url = `${ZOHO_WORKDRIVE_API}/upload`;
-        }
+        form.append('parent_id', ZOHO_WORKDRIVE_FOLDER_ID);
+        form.append('override-name-exist', 'true');
 
-        const response = await axios.post(url, form, {
+        await axios.post(`${ZOHO_WORKDRIVE_API}/upload`, form, {
             headers: { 
                 ...form.getHeaders(),
                 Authorization: `Zoho-oauthtoken ${token}` 
@@ -145,6 +134,52 @@ app.post('/api/saveItinerary', async (req, res) => {
     } catch (error) {
         console.error("Error saving itinerary:", error.response ? error.response.data : error.message);
         res.status(500).json({ success: false, error: 'Error saving itinerary to Zoho.' });
+    }
+});
+
+// List all Itineraries in the WorkDrive folder
+app.get('/api/listItineraries', async (req, res) => {
+    try {
+        const token = await getZohoToken();
+        const response = await axios.get(`${ZOHO_WORKDRIVE_API}/files/${ZOHO_WORKDRIVE_FOLDER_ID}/files`, {
+            headers: { Authorization: `Zoho-oauthtoken ${token}` }
+        });
+
+        const files = (response.data && response.data.data) ? response.data.data : [];
+        const jsonFiles = files.filter(f => f.attributes && f.attributes.name && f.attributes.name.endsWith('.json'));
+
+        const itineraries = [];
+        for (const file of jsonFiles) {
+            try {
+                const downloadUrl = `${ZOHO_WORKDRIVE_API}/download/${file.id}`;
+                const downloadRes = await axios.get(downloadUrl, {
+                    headers: { Authorization: `Zoho-oauthtoken ${token}` },
+                    responseType: 'json'
+                });
+                // Only return summary fields to keep dashboard fast
+                const d = downloadRes.data;
+                itineraries.push({
+                    id: d.id,
+                    guest: d.guest,
+                    title: d.title,
+                    start: d.start,
+                    end: d.end,
+                    duration: d.duration,
+                    status: d.status,
+                    isVoucherMode: d.isVoucherMode,
+                    timestamp: d.timestamp
+                });
+            } catch(e) {
+                console.warn('Could not parse file:', file.attributes.name, e.message);
+            }
+        }
+
+        // Sort by timestamp descending
+        itineraries.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        res.json({ success: true, data: itineraries });
+    } catch (error) {
+        console.error("Error listing itineraries:", error.response ? error.response.data : error.message);
+        res.status(500).json({ success: false, error: 'Error listing itineraries from Zoho.' });
     }
 });
 

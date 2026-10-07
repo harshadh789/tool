@@ -1,19 +1,3 @@
-const firebaseConfig = {
-  apiKey: "AIzaSyDYS-NHTF_6SkzKfCibLqKCv0o902mYkxA",
-  authDomain: "tool-59ad5.firebaseapp.com",
-  projectId: "tool-59ad5",
-  storageBucket: "tool-59ad5.firebasestorage.app",
-  messagingSenderId: "983173291653",
-  appId: "1:983173291653:web:7c9dbd041fe7792eda93ec",
-  measurementId: "G-3FE7DLEF3F"
-};
-
-let db;
-if (typeof firebase !== 'undefined') {
-  firebase.initializeApp(firebaseConfig);
-  db = firebase.firestore();
-}
-
 let allItineraries = [];
 let currentTabFilter = 'all';
 
@@ -35,34 +19,25 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 async function fetchData() {
-    if (!db) {
-        alert("Firebase DB not initialized.");
-        return;
-    }
-    
-    document.getElementById('table_body').innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 30px;"><i class="fa-solid fa-spinner fa-spin"></i> Loading data from Cloud...</td></tr>`;
+    document.getElementById('table_body').innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 30px;"><i class="fa-solid fa-spinner fa-spin"></i> Loading data from Cloud...</td></tr>';
 
     try {
-        const snapshot = await db.collection("itineraries").orderBy("timestamp", "desc").get();
-        allItineraries = [];
-        
+        const response = await fetch('/api/listItineraries');
+        if (!response.ok) throw new Error('HTTP error! status: ' + response.status);
+        const result = await response.json();
+
+        if (!result.success) throw new Error(result.error || "Failed to load data");
+
+        allItineraries = result.data || [];
+
         let totalVouchers = 0;
         let totalQuotes = 0;
         let totalGuests = 0;
 
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            data.docId = doc.id;
-            allItineraries.push(data);
-
-            if (data.isVoucherMode) {
-                totalVouchers++;
-            } else {
-                totalQuotes++;
-            }
-            if (data.guests) {
-                totalGuests += parseInt(data.guests) || 0;
-            }
+        allItineraries.forEach(it => {
+            if (it.isVoucherMode) { totalVouchers++; } 
+            else { totalQuotes++; }
+            if (it.adults) { totalGuests += parseInt(it.adults) || 0; }
         });
 
         document.getElementById('stat_vouchers').innerText = totalVouchers;
@@ -72,7 +47,7 @@ async function fetchData() {
         renderTable();
     } catch (error) {
         console.error("Error fetching data:", error);
-        document.getElementById('table_body').innerHTML = `<tr><td colspan="6" style="text-align:center; color:red;">Error loading data.</td></tr>`;
+        document.getElementById('table_body').innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Error loading data: ' + error.message + '</td></tr>';
     }
 }
 
@@ -81,11 +56,8 @@ function renderTable(searchTerm = "") {
     tbody.innerHTML = "";
 
     const filtered = allItineraries.filter(it => {
-        // First check tab filter
         const derivedStatus = it.isVoucherMode ? 'Voucher' : (it.status || 'Draft');
         if (currentTabFilter !== 'all' && derivedStatus !== currentTabFilter) return false;
-
-        // Then check search filter
         if (!searchTerm) return true;
         const idMatch = it.id && it.id.toLowerCase().includes(searchTerm);
         const nameMatch = it.guest && it.guest.toLowerCase().includes(searchTerm);
@@ -94,7 +66,7 @@ function renderTable(searchTerm = "") {
     });
 
     if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 20px;">No records found.</td></tr>`;
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 20px;">No records found.</td></tr>';
         return;
     }
 
@@ -113,42 +85,38 @@ function renderTable(searchTerm = "") {
             statusClass = 'status-draft';
             statusText = 'Draft Quote';
         } else {
-            statusClass = 'status-quote'; // Fallback if no specific status
+            statusClass = 'status-quote';
             statusText = it.status || 'Quote';
         }
         
-        const tripDates = `${it.start || '?'} to ${it.end || '?'}`;
+        const tripDates = (it.start || '?') + ' to ' + (it.end || '?');
+        const docId = it.id;
         
-        let actions = ``;
+        let actions = '';
         if (isVoucher) {
-            actions += `<button class="action-btn" title="Edit" onclick="window.open('index.html?edit=${it.docId}', '_blank')"><i class="fa-solid fa-pen"></i></button>`;
-            actions += `<button class="action-btn" title="View Voucher" onclick="window.open('index.html?voucher=${it.docId}', '_blank')"><i class="fa-solid fa-eye"></i></button>`;
-            actions += `<button class="action-btn" title="Copy Client Link" onclick="copyToClipboard('index.html?voucher=${it.docId}')"><i class="fa-solid fa-link"></i></button>`;
+            actions += '<button class="action-btn" title="Edit" onclick="window.open(\'/?edit=' + docId + '\', \'_blank\')"><i class="fa-solid fa-pen"></i></button>';
+            actions += '<button class="action-btn" title="View Voucher" onclick="window.open(\'/?voucher=' + docId + '\', \'_blank\')"><i class="fa-solid fa-eye"></i></button>';
+            actions += '<button class="action-btn" title="Copy Client Link" onclick="copyToClipboard(\'/?voucher=' + docId + '\')"><i class="fa-solid fa-link"></i></button>';
         } else {
-            actions += `<button class="action-btn" title="Edit" onclick="window.open('index.html?edit=${it.docId}', '_blank')"><i class="fa-solid fa-pen"></i></button>`;
-            actions += `<button class="action-btn" title="View Itinerary" onclick="window.open('index.html?id=${it.docId}', '_blank')"><i class="fa-solid fa-eye"></i></button>`;
-            actions += `<button class="action-btn" title="Copy Client Link" onclick="copyToClipboard('index.html?id=${it.docId}')"><i class="fa-solid fa-link"></i></button>`;
+            actions += '<button class="action-btn" title="Edit" onclick="window.open(\'/?edit=' + docId + '\', \'_blank\')"><i class="fa-solid fa-pen"></i></button>';
+            actions += '<button class="action-btn" title="View Itinerary" onclick="window.open(\'/?id=' + docId + '\', \'_blank\')"><i class="fa-solid fa-eye"></i></button>';
+            actions += '<button class="action-btn" title="Copy Client Link" onclick="copyToClipboard(\'/?id=' + docId + '\')"><i class="fa-solid fa-link"></i></button>';
         }
 
-        const row = `
-            <tr>
-                <td><strong>${it.id || it.docId}</strong></td>
-                <td>
-                    <div style="font-weight:600;">${it.guest || 'N/A'}</div>
-                    <div style="font-size:12px; color:var(--text-light);">${it.title || 'N/A'}</div>
-                </td>
-                <td>${tripDates}</td>
-                <td>${it.duration || 'N/A'}</td>
-                <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-                <td>${actions}</td>
-            </tr>
-        `;
+        const row = '<tr>' +
+            '<td><strong>' + (it.id || 'N/A') + '</strong></td>' +
+            '<td><div style="font-weight:600;">' + (it.guest || 'N/A') + '</div><div style="font-size:12px; color:var(--text-light);">' + (it.title || 'N/A') + '</div></td>' +
+            '<td>' + tripDates + '</td>' +
+            '<td>' + (it.duration || 'N/A') + '</td>' +
+            '<td><span class="status-badge ' + statusClass + '">' + statusText + '</span></td>' +
+            '<td>' + actions + '</td>' +
+            '</tr>';
         tbody.insertAdjacentHTML('beforeend', row);
     });
 }
 
 function copyToClipboard(path) {
-    const fullUrl = window.location.origin + window.location.pathname.replace('dashboard.html', '') + path;
+    const fullUrl = window.location.origin + path;
     navigator.clipboard.writeText(fullUrl).then(() => {
         alert("Client link copied to clipboard!");
     }).catch(err => {

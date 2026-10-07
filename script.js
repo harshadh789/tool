@@ -694,6 +694,10 @@
             return; // Skip alerts and link generation for silent saves
         }
 
+        if (currentStatus === 'Requested') {
+            showToast("✅ Sent to Ops Team!");
+        }
+
         let link = window.location.origin + window.location.pathname + "?id=" + quoteId;
         if(itinerary.isVoucherMode) {
             link = window.location.origin + window.location.pathname + "?voucher=" + quoteId;
@@ -720,10 +724,9 @@
     saveToCloud(true);
   }
 
-  function requestOps() {
+  async function requestOps() {
     currentStatus = 'Requested';
-    saveToCloud(false);
-    showToast("Sent to Ops Team!");
+    await saveToCloud(false);
   }
 
 
