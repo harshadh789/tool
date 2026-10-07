@@ -1,17 +1,3 @@
-const firebaseConfig = {
-  apiKey: "AIzaSyDYS-NHTF_6SkzKfCibLqKCv0o902mYkxA",
-  authDomain: "tool-59ad5.firebaseapp.com",
-  projectId: "tool-59ad5",
-  storageBucket: "tool-59ad5.firebasestorage.app",
-  messagingSenderId: "983173291653",
-  appId: "1:983173291653:web:7c9dbd041fe7792eda93ec",
-  measurementId: "G-3FE7DLEF3F"
-};
-if (typeof firebase !== 'undefined') {
-  firebase.initializeApp(firebaseConfig);
-}
-const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
-
 
   let dayCount = 0; 
   let hotelCount = 0;
@@ -645,7 +631,7 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
       driverName: getVal('i_driver_name'), driverPhone: getVal('i_driver_phone'), pickupInst: getVal('i_pickup_inst'),
 
       inc: getVal('i_inc'), exc: getVal('i_exc'), terms: getVal('i_terms'),
-      hotels: [], days: [], timestamp: Date.now(), status: currentStatus
+      hotels: [], days: [], documents: uploadedDocuments, timestamp: Date.now(), status: currentStatus
     };
 
     document.querySelectorAll('.hotel-input-group').forEach(block => {
@@ -694,8 +680,14 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
     const itinerary = getItineraryData(quoteId);
 
     try {
-        if (!db) throw new Error("Firebase DB not initialized.");
-        await db.collection("itineraries").doc(quoteId).set(itinerary);
+        const response = await fetch('/api/saveItinerary', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(itinerary)
+        });
+
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Failed to save to backend.");
         
         if (isSilent) {
             if (isSilent !== 'auto') showToast("Draft Saved to Cloud!");
@@ -713,8 +705,8 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
             alert("Success! Link: " + link);
         });
     } catch (e) {
-        console.error("Error saving to cloud: ", e);
-        if(!isSilent) alert("Error saving to cloud. See console.");
+      console.error("Error saving to cloud: ", e);
+      if(!isSilent) alert("Error saving to cloud: " + (e.message || JSON.stringify(e)));
     } finally {
         if(btn && !isSilent) {
             btn.innerHTML = ogText;
@@ -839,10 +831,12 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
         if(loader) loader.style.display = 'flex';
 
         try {
-            if(!db) throw new Error("Firebase DB not initialized.");
-            const docRef = await db.collection("itineraries").doc(activeId).get();
-            if (docRef.exists) {
-                const data = docRef.data();
+            const response = await fetch(`/api/getItinerary/${activeId}`);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            
+            const result = await response.json();
+            if (result.success && result.data) {
+                const data = result.data;
                 if (voucherId) {
                     data.isVoucherMode = true; // force voucher mode for ?voucher param
                 }
@@ -863,3 +857,105 @@ const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
   }
 
   boot();
+
+  // --- Document Management Logic (Generic mock for UI) ---
+  let uploadedDocuments = [];
+
+  function handleDocumentUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      // Simulate upload delay
+      const toast = document.getElementById('toast');
+      if (toast) {
+          toast.textContent = "Uploading to Zoho WorkDrive...";
+          toast.className = "show";
+          setTimeout(() => toast.className = toast.className.replace("show", ""), 2500);
+      }
+
+      // Mock successful upload and Zoho API response
+      setTimeout(() => {
+          const fileObj = {
+              id: 'doc_' + Date.now(),
+              name: file.name,
+              size: (file.size / 1024).toFixed(2) + ' KB',
+              type: file.type,
+              url: URL.createObjectURL(file), // Local blob URL for view/download
+              zohoId: 'wkdrv_' + Math.random().toString(36).substring(7) // Mock Zoho ID
+          };
+          
+          uploadedDocuments.push(fileObj);
+          renderDocuments();
+          event.target.value = ''; // Reset input
+          
+          if (toast) {
+              toast.textContent = "Document uploaded successfully!";
+              toast.className = "show";
+              setTimeout(() => toast.className = toast.className.replace("show", ""), 2500);
+          }
+      }, 1000);
+  }
+
+  function renderDocuments() {
+      const list = document.getElementById('docs-list');
+      const emptyState = document.getElementById('docs-empty-state');
+      
+      list.innerHTML = '';
+      
+      if (uploadedDocuments.length === 0) {
+          emptyState.style.display = 'block';
+      } else {
+          emptyState.style.display = 'none';
+          
+          uploadedDocuments.forEach(doc => {
+              const div = document.createElement('div');
+              div.style = "display:flex; justify-content:space-between; align-items:center; background:#f9fafb; padding:10px; border-radius:6px; border:1px solid #e5e7eb;";
+              
+              const icon = doc.type.includes('pdf') ? 'fa-file-pdf' : (doc.type.includes('image') ? 'fa-file-image' : 'fa-file');
+              const color = doc.type.includes('pdf') ? '#e11d48' : '#0284c7';
+              
+              div.innerHTML = `
+                  <div style="display:flex; align-items:center; gap:10px; overflow:hidden;">
+                      <i class="fa-solid ${icon}" style="color:${color}; font-size:20px;"></i>
+                      <div style="display:flex; flex-direction:column; overflow:hidden;">
+                          <span style="font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:180px;" title="${doc.name}">${doc.name}</span>
+                          <span style="font-size:11px; color:#6b7280;">${doc.size}</span>
+                      </div>
+                  </div>
+                  <div style="display:flex; gap:5px; flex-shrink:0;">
+                      <button class="btn-outline" style="padding:4px 8px; font-size:12px; min-width:auto;" onclick="viewDocument('${doc.id}')" title="View/Download"><i class="fa-solid fa-eye"></i></button>
+                      <button class="btn-outline" style="padding:4px 8px; font-size:12px; min-width:auto; color:#ef4444; border-color:#fca5a5;" onclick="deleteDocument('${doc.id}')" title="Delete"><i class="fa-solid fa-trash"></i></button>
+                  </div>
+              `;
+              list.appendChild(div);
+          });
+      }
+  }
+
+  function viewDocument(id) {
+      const doc = uploadedDocuments.find(d => d.id === id);
+      if (doc && doc.url) {
+          // Open the document in a new tab to view or trigger download
+          const link = document.createElement('a');
+          link.href = doc.url;
+          link.target = '_blank';
+          link.download = doc.name; // Encourages download if browser can't view
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+      }
+  }
+
+  function deleteDocument(id) {
+      if (confirm("Are you sure you want to delete this document?")) {
+          uploadedDocuments = uploadedDocuments.filter(d => d.id !== id);
+          renderDocuments();
+          
+          const toast = document.getElementById('toast');
+          if (toast) {
+              toast.textContent = "Document deleted.";
+              toast.className = "show";
+              setTimeout(() => toast.className = toast.className.replace("show", ""), 2500);
+          }
+      }
+  }
