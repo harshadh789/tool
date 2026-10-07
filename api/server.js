@@ -10,7 +10,7 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
 // Serve static frontend files
-app.use(express.static(path.join(__dirname, '/')));
+app.use(express.static(path.join(__dirname, '../')));
 
 const ZOHO_CLIENT_ID = process.env.ZOHO_CLIENT_ID;
 const ZOHO_CLIENT_SECRET = process.env.ZOHO_CLIENT_SECRET;
