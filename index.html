@@ -98,7 +98,7 @@
   <div class="accordion">
     <div class="accordion-header" onclick="toggleAccordion(this)">1. Trip Overview <span><i class="fa-solid fa-chevron-up"></i></span></div>
     <div class="accordion-content active">
-      <div class="form-group"><label>Quotation Number (Unique ID)</label><input type="text" id="i_quote" oninput="triggerUpdate()"></div>
+      <div class="form-group"><label>Quotation Number (Unique ID) <i class="fa-solid fa-lock lock-icon"></i></label><input type="text" id="i_quote" class="locked-field" readonly></div>
       <div class="form-group"><label>Guest Name</label><input type="text" id="i_guest" value="Mr Arham Fahmi" oninput="triggerUpdate()"></div>
       <div class="form-group"><label>Number of Adults</label><input type="number" id="i_adults" value="2" oninput="calcFinancials(); triggerUpdate()"></div>
       <div class="form-group"><label>Main Hero Image URL</label><input type="text" id="i_hero_img" value="https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&q=80&w=1000" oninput="triggerUpdate()"></div>

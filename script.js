@@ -724,9 +724,9 @@
     currentStatus = 'Draft';
     loadGlobals();
 
-    document.getElementById('i_quote').value = `CMP-2026-001`;
-
     const today = new Date(); // Dynamic live current date
+    const uniqueNum = Math.floor(100000 + Math.random() * 900000);
+    document.getElementById('i_quote').value = `CMP-${today.getFullYear()}-${uniqueNum}`;
     const valid = new Date(today); valid.setDate(valid.getDate() + 15); 
     
     document.getElementById('i_gen_date').value = today.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
