@@ -1,4 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
+const { validateItinerary } = require('../validation.js');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -65,6 +66,11 @@ async function createItinerary(quoteId, payload, user, userRole) {
         throw new Error("Only Admin and Sales can create itineraries.");
     }
 
+    const valRes = validateItinerary(payload);
+    if (!valRes.isValid) {
+        throw new Error("Validation failed: " + valRes.errors.join("; "));
+    }
+
     const newRecord = {
         quote_id: quoteId,
         owner_id: user.id,
@@ -111,6 +117,11 @@ async function updateItinerary(quoteId, payload, currentVersion, user, userRole)
         }
     } else {
         throw new Error("Ops/Unauthorized cannot edit itinerary content directly.");
+    }
+
+    const valRes = validateItinerary(payload);
+    if (!valRes.isValid) {
+        throw new Error("Validation failed: " + valRes.errors.join("; "));
     }
 
     // Concurrency Check

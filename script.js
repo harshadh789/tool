@@ -5,6 +5,7 @@
   let autoSaveTimeout = null;
   let isBooting = false;
   let currentStatus = 'Draft';
+  let currentRecordVersion = null;
 
   function getVal(id) { const el = document.getElementById(id); return el ? el.value : ''; }
   function getNum(id) { const el = document.getElementById(id); return el ? parseFloat(el.value) || 0 : 0; }
@@ -666,14 +667,39 @@
 
     const itinerary = getItineraryData(quoteId);
 
+    if (window.Validation) {
+        const valRes = window.Validation.validateItinerary(itinerary);
+        if (!valRes.isValid) {
+            if (!isSilent) alert("Validation Errors:\n" + valRes.errors.join("\n"));
+            if (btn && !isSilent) {
+                btn.innerHTML = ogText;
+                btn.disabled = false;
+            }
+            return;
+        }
+        if (valRes.warnings.length > 0 && !isSilent) {
+            const proceed = confirm("There are missing fields, but you can save as Draft. Proceed?\n\nWarnings:\n" + valRes.warnings.join("\n"));
+            if (!proceed) {
+                if (btn && !isSilent) {
+                    btn.innerHTML = ogText;
+                    btn.disabled = false;
+                }
+                return;
+            }
+        }
+    }
+
     try {
         const response = await fetchWithAuth('/api/saveItinerary', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(itinerary)
+            body: JSON.stringify({ itinerary, version: currentRecordVersion })
         });
 
         const data = await response.json();
+        if (data.version) {
+            currentRecordVersion = data.version;
+        }
         if (!data.success) throw new Error(data.error || "Failed to save to backend.");
         
         if (isSilent) {
@@ -757,6 +783,7 @@
     if(!data) return;
     isBooting = true;
     currentStatus = data.status || 'Draft';
+    currentRecordVersion = data.version || null;
     
     document.getElementById('i_quote').value = data.id || '';
     document.getElementById('i_gen_date').value = data.genDate || '';

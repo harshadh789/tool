@@ -1,11 +1,29 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const { validateItinerary } = require('../validation.js');
 const axios = require('axios');
 const path = require('path');
 const FormData = require('form-data');
 const { createClient } = require('@supabase/supabase-js');
+const db = require('./db.js');
 
+const EXPECTED_STAGING_HOST = 'iqqkuqgsvuciunmvtmdr.supabase.co';
+
+function isSafeSupabaseUrl(urlStr) {
+    if (!urlStr) return false;
+    try {
+        const u = new URL(urlStr);
+        if (u.protocol !== 'https:') return false;
+        if (u.hostname !== EXPECTED_STAGING_HOST) return false;
+        if (u.username || u.password) return false;
+        if (u.port && u.port !== '443') return false;
+        if (u.search || u.hash) return false;
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -163,16 +181,61 @@ app.get('/callback', async (req, res) => {
     res.status(403).send("<h1>Forbidden</h1><p>OAuth endpoints are disabled.</p>");
 });
 
-// Save Itinerary
 app.post('/api/saveItinerary', requireAuth, async (req, res) => {
+    const provider = process.env.STORAGE_PROVIDER;
+    if (provider !== undefined && provider !== 'workdrive' && provider !== 'supabase') {
+        return res.status(500).json({ success: false, error: 'Safety abort: Invalid STORAGE_PROVIDER.' });
+    }
+    const activeProvider = provider === undefined ? 'workdrive' : provider;
+
+    if (activeProvider === 'supabase') {
+        if (!isSafeSupabaseUrl(process.env.SUPABASE_URL)) {
+            return res.status(500).json({ success: false, error: 'Safety abort: Supabase storage is only permitted in the verified staging environment.' });
+        }
+        try {
+            const payload = req.body.itinerary || req.body;
+            const version = req.body.version || null;
+            if (!payload.id) return res.status(400).json({ success: false, error: 'Missing Quotation Number (ID)' });
+            
+            let data;
+            if (!version) {
+                data = await db.createItinerary(payload.id, payload, req.user, req.userRole);
+            } else {
+                data = await db.updateItinerary(payload.id, payload, version, req.user, req.userRole);
+            }
+            return res.json({ success: true, message: 'Itinerary saved to Supabase.', version: data.version });
+        } catch (error) {
+            console.error("Supabase Save Error:", error.message);
+            if (error.message.includes("Concurrency Conflict") || error.message.includes("Conflict:")) {
+                return res.status(409).json({ success: false, error: error.message });
+            }
+            if (error.message.includes("Validation failed") || error.message.includes("Missing")) {
+                return res.status(400).json({ success: false, error: error.message });
+            }
+            if (error.message.includes("Not authorized") || error.message.includes("Only Admin") || error.message.includes("Sales can only edit their own itineraries") || error.message.includes("Legacy unassigned records") || error.message.includes("Ops/Unauthorized")) {
+                return res.status(403).json({ success: false, error: error.message });
+            }
+            return res.status(500).json({ success: false, error: 'Failed to sync itinerary with cloud storage. Please try again later.' });
+        }
+    }
+
     // Write access is temporarily restricted to Admin because WorkDrive does not support safe atomic ownership checks.
     if (req.userRole !== 'ADMIN') {
         return res.status(403).json({ success: false, error: 'Forbidden: Write access is temporarily restricted to Administrators pending database migration.' });
     }
 
     try {
-        const itinerary = req.body;
+        const itinerary = req.body.itinerary || req.body;
         if (!itinerary.id) return res.status(400).json({ success: false, error: 'Missing Quotation Number (ID)' });
+        
+        const valRes = validateItinerary(itinerary);
+        if (!valRes.isValid) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Validation failed: ' + valRes.errors.join('; ') 
+            });
+        }
+
         
         const token = await getZohoToken();
         const fileName = `${itinerary.id}.json`;
@@ -202,8 +265,37 @@ app.post('/api/saveItinerary', requireAuth, async (req, res) => {
     }
 });
 
-// List all Itineraries in the WorkDrive folder
 app.get('/api/listItineraries', requireAuth, async (req, res) => {
+    const provider = process.env.STORAGE_PROVIDER;
+    if (provider !== undefined && provider !== 'workdrive' && provider !== 'supabase') {
+        return res.status(500).json({ success: false, error: 'Safety abort: Invalid STORAGE_PROVIDER.' });
+    }
+    const activeProvider = provider === undefined ? 'workdrive' : provider;
+
+    if (activeProvider === 'supabase') {
+        if (!isSafeSupabaseUrl(process.env.SUPABASE_URL)) {
+            return res.status(500).json({ success: false, error: 'Safety abort: Supabase storage is only permitted in the verified staging environment.' });
+        }
+        try {
+            const data = await db.listItineraries(req.user, req.userRole);
+            const mapped = data.map(d => ({
+                id: d.quote_id,
+                guest: d.guest_name,
+                title: d.title,
+                start: d.start_date,
+                end: d.end_date,
+                status: d.status,
+                isVoucherMode: d.is_voucher_mode,
+                timestamp: new Date(d.updated_at).getTime(),
+                version: d.version
+            }));
+            return res.json({ success: true, data: mapped });
+        } catch(error) {
+            console.error("Supabase List Error:", error.message);
+            return res.status(500).json({ success: false, error: 'Error listing itineraries from Supabase.' });
+        }
+    }
+
     try {
         const token = await getZohoToken();
         const response = await axios.get(`${ZOHO_WORKDRIVE_API}/files/${ZOHO_WORKDRIVE_FOLDER_ID}/files`, {
@@ -248,8 +340,29 @@ app.get('/api/listItineraries', requireAuth, async (req, res) => {
     }
 });
 
-// Load Itinerary
 app.get('/api/getItinerary/:id', requireAuth, async (req, res) => {
+    const provider = process.env.STORAGE_PROVIDER;
+    if (provider !== undefined && provider !== 'workdrive' && provider !== 'supabase') {
+        return res.status(500).json({ success: false, error: 'Safety abort: Invalid STORAGE_PROVIDER.' });
+    }
+    const activeProvider = provider === undefined ? 'workdrive' : provider;
+
+    if (activeProvider === 'supabase') {
+        if (!isSafeSupabaseUrl(process.env.SUPABASE_URL)) {
+            return res.status(500).json({ success: false, error: 'Safety abort: Supabase storage is only permitted in the verified staging environment.' });
+        }
+        try {
+            const data = await db.getItinerary(req.params.id, req.user, req.userRole);
+            if (!data) return res.status(404).json({ success: false, error: 'Itinerary not found in Supabase.' });
+            
+            const content = { ...data.content, version: data.version };
+            return res.json({ success: true, data: content });
+        } catch(error) {
+            console.error("Supabase Get Error:", error.message);
+            return res.status(500).json({ success: false, error: 'Error loading itinerary from Supabase.' });
+        }
+    }
+
     try {
         const { id } = req.params;
         const token = await getZohoToken();

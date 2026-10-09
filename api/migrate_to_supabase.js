@@ -4,10 +4,7 @@ const { createClient } = require('@supabase/supabase-js');
 
 const EXPECTED_STAGING_HOST = 'iqqkuqgsvuciunmvtmdr.supabase.co';
 
-const APPROVED_QUOTE_IDS = [
-    'CMP-2026-001222',
-    'CMP-2026-001333'
-];
+const APPROVED_QUOTE_IDS = [];
 
 function parseDate(dateStr) {
     if (!dateStr) return null;
@@ -68,6 +65,9 @@ async function runMigrationProcess(options) {
 
     try {
         validateEnvironment(env);
+        if (APPROVED_QUOTE_IDS.length === 0) {
+            throw new Error("Safety abort: APPROVED_QUOTE_IDS manifest is empty. No records are approved for import.");
+        }
     } catch (err) {
         logger.error(`[FATAL] ${err.message}`);
         throw err;
