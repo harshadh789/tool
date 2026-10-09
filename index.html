@@ -7,6 +7,7 @@
   
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   
@@ -24,8 +25,8 @@
     <p class="auth-subtitle">Authorized Staff Access Only</p>
     
     <div class="auth-input-group">
-      <label>Employee ID</label>
-      <input type="text" id="login_user" placeholder="e.g. emp1">
+      <label>Email Address</label>
+      <input type="email" id="login_email" placeholder="employee@campfly.in">
     </div>
     
     <div class="auth-input-group">
@@ -62,6 +63,7 @@
     <button class="btn" style="background: var(--theme-dark); color: #fff;" onclick="window.open('dashboard.html', '_blank')"><i class="fa-solid fa-chart-pie"></i> Dashboard</button>
     <button class="btn" style="background: var(--theme-accent); color: #fff;" onclick="saveToCloud()" id="btn_save_cloud"><i class="fa-solid fa-cloud-arrow-up"></i> Save to Cloud & Get Link</button>
     <button class="btn" onclick="generatePDF()"><i class="fa-solid fa-file-arrow-down"></i> Download Infinite PDF</button>
+    <button class="btn btn-secondary" style="margin-left:auto; background: #fee2e2; color: #ef4444;" onclick="handleLogout()"><i class="fa-solid fa-arrow-right-from-bracket"></i> Logout</button>
   </div>
 
   <!-- Accordion 0: Global Settings -->
@@ -450,6 +452,7 @@ Important: Please carry original ID proofs for all passengers during travel.</te
   <p style="margin-top:15px; font-weight:600; color:var(--theme-dark);" id="loader-text">Loading Itinerary...</p>
 </div>
 
+<script src="auth.js"></script>
 <script src="script.js?v=999"></script>
 </body>
 </html>

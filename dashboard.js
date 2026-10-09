@@ -1,7 +1,19 @@
 let allItineraries = [];
 let currentTabFilter = 'all';
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+    const isAuth = await initAuth();
+    if (!isAuth) {
+        window.location.href = 'index.html';
+        return;
+    }
+    
+    // Update profile
+    const emailEl = document.getElementById('dash_user_email');
+    if (emailEl && currentSession && currentSession.user) {
+        emailEl.innerText = currentSession.user.email;
+    }
+
     fetchData();
 
     document.getElementById('search_input').addEventListener('input', (e) => {
@@ -22,7 +34,7 @@ async function fetchData() {
     document.getElementById('table_body').innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 30px;"><i class="fa-solid fa-spinner fa-spin"></i> Loading data from Cloud...</td></tr>';
 
     try {
-        const response = await fetch('/api/listItineraries');
+        const response = await fetchWithAuth('/api/listItineraries');
         if (!response.ok) throw new Error('HTTP error! status: ' + response.status);
         const result = await response.json();
 

@@ -4,6 +4,7 @@ const cors = require('cors');
 const axios = require('axios');
 const path = require('path');
 const FormData = require('form-data');
+const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 app.use(cors());
@@ -11,6 +12,50 @@ app.use(express.json({ limit: '50mb' }));
 
 // Serve static frontend files
 app.use(express.static(path.join(__dirname, '../')));
+
+// Initialize Supabase
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+let supabase = null;
+if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
+
+// Middleware to check Supabase Auth
+async function requireAuth(req, res, next) {
+    if (!supabase) {
+        return res.status(500).json({ success: false, error: 'Authentication is not configured on the server. Please set SUPABASE_URL and SUPABASE_ANON_KEY in .env' });
+    }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ success: false, error: 'Missing or invalid Authorization header' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+
+    if (error || !user) {
+        return res.status(401).json({ success: false, error: 'Unauthorized: Invalid token' });
+    }
+
+    req.user = user;
+    
+    // Check Role
+    try {
+        const { data: profile } = await supabase
+            .from('user_roles')
+            .select('role')
+            .eq('user_id', user.id)
+            .single();
+            
+        req.userRole = profile ? profile.role : 'USER'; 
+    } catch (e) {
+        req.userRole = 'USER';
+    }
+
+    next();
+}
 
 const ZOHO_CLIENT_ID = process.env.ZOHO_CLIENT_ID;
 const ZOHO_CLIENT_SECRET = process.env.ZOHO_CLIENT_SECRET;
@@ -66,6 +111,13 @@ async function findFileByName(token, fileName) {
 
 // --- API Routes ---
 
+app.get('/api/auth/config', (req, res) => {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+        return res.status(500).json({ success: false, error: 'Supabase configuration missing on server.' });
+    }
+    res.json({ success: true, url: SUPABASE_URL, key: SUPABASE_ANON_KEY });
+});
+
 // Setup Auth Routes
 app.get('/auth', (req, res) => {
     // Scopes for Bigin and WorkDrive
@@ -107,7 +159,7 @@ app.get('/callback', async (req, res) => {
 });
 
 // Save Itinerary
-app.post('/api/saveItinerary', async (req, res) => {
+app.post('/api/saveItinerary', requireAuth, async (req, res) => {
     try {
         const itinerary = req.body;
         if (!itinerary.id) return res.status(400).json({ success: false, error: 'Missing Quotation Number (ID)' });
@@ -143,7 +195,11 @@ app.post('/api/saveItinerary', async (req, res) => {
 });
 
 // List all Itineraries in the WorkDrive folder
-app.get('/api/listItineraries', async (req, res) => {
+app.get('/api/listItineraries', requireAuth, async (req, res) => {
+    if (req.userRole !== 'ADMIN') {
+        return res.status(403).json({ success: false, error: 'Forbidden: Admin access required to view all quotations.' });
+    }
+    
     try {
         const token = await getZohoToken();
         const response = await axios.get(`${ZOHO_WORKDRIVE_API}/files/${ZOHO_WORKDRIVE_FOLDER_ID}/files`, {
@@ -189,7 +245,7 @@ app.get('/api/listItineraries', async (req, res) => {
 });
 
 // Load Itinerary
-app.get('/api/getItinerary/:id', async (req, res) => {
+app.get('/api/getItinerary/:id', requireAuth, async (req, res) => {
     try {
         const { id } = req.params;
         const token = await getZohoToken();

@@ -5,6 +5,7 @@
   <title>Dashboard - Campfly</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
@@ -23,9 +24,10 @@
     <div class="user-profile">
       <div class="avatar"><i class="fa-solid fa-user"></i></div>
       <div class="info">
-        <strong>Admin</strong>
-        <span>admin@campfly.in</span>
+        <strong id="dash_user_role">Admin</strong>
+        <span id="dash_user_email">admin@campfly.in</span>
       </div>
+      <button onclick="handleLogout()" style="margin-left:auto; background:none; border:none; color:#ef4444; cursor:pointer;" title="Logout"><i class="fa-solid fa-arrow-right-from-bracket"></i></button>
     </div>
   </aside>
 
@@ -94,6 +96,7 @@
   </main>
 
 
+  <script src="auth.js"></script>
   <script src="dashboard.js"></script>
 </body>
 </html>

@@ -61,52 +61,39 @@
     }
   }
 
-  // --- STRICT ACCESS CONTROL LOCK-WALL & CONFIG LOADER ---
-  async function loadSecureConfig() {
-    const user = document.getElementById('login_user').value.trim();
-    const pass = document.getElementById('login_pass').value.trim();
-    const errorEl = document.getElementById('login_error');
-
-    if (!user || !pass) {
-      errorEl.innerText = "Please enter both ID and Password.";
-      errorEl.style.display = "block";
-      return;
-    }
-
-    // Set your manual password here!
-    const MANUAL_PASSWORD = "123";
-
-    if (pass === MANUAL_PASSWORD) {
-        // Hardcoded global configuration since backend is removed
-        const config = {
-            footerLogo: "https://www.campfly.in/assets/logo-cropped.png",
-            bkName: "CAMPFLY TOURS LLP",
-            bkAcc: "10292311723",
-            bkIfsc: "IDFB0080511",
-            bkUpi: "campfly@idfcbank"
-        };
-        
-        document.getElementById('i_footer_logo').value = config.footerLogo;
-        document.getElementById('i_bk_name').value = config.bkName;
-        document.getElementById('i_bk_acc').value = config.bkAcc;
-        document.getElementById('i_bk_ifsc').value = config.bkIfsc;
-        document.getElementById('i_bk_upi').value = config.bkUpi;
-        
-        document.getElementById('auth-overlay').style.opacity = '0';
-        setTimeout(() => {
-            document.getElementById('auth-overlay').style.display = 'none';
-        }, 300);
-        triggerUpdate();
-        showToast("Access Granted. Welcome, " + user + "!");
-    } else {
-        errorEl.innerText = "Access Denied: Invalid credentials.";
-        errorEl.style.display = "block";
-    }
+  // --- CONFIG LOADER ---
+  function loadGlobals() {
+      // Hardcoded global configuration since backend is removed
+      const config = {
+          footerLogo: "https://www.campfly.in/assets/logo-cropped.png",
+          bkName: "CAMPFLY TOURS LLP",
+          bkAcc: "10292311723",
+          bkIfsc: "IDFB0080511",
+          bkUpi: "campfly@idfcbank"
+      };
+      
+      const elFooterLogo = document.getElementById('i_footer_logo');
+      if (elFooterLogo) elFooterLogo.value = config.footerLogo;
+      const elBkName = document.getElementById('i_bk_name');
+      if (elBkName) elBkName.value = config.bkName;
+      const elBkAcc = document.getElementById('i_bk_acc');
+      if (elBkAcc) elBkAcc.value = config.bkAcc;
+      const elBkIfsc = document.getElementById('i_bk_ifsc');
+      if (elBkIfsc) elBkIfsc.value = config.bkIfsc;
+      const elBkUpi = document.getElementById('i_bk_upi');
+      if (elBkUpi) elBkUpi.value = config.bkUpi;
+      
+      triggerUpdate();
   }
 
-  function handleLogin() {
-    loadSecureConfig();
-  }
+  window.onLoginSuccess = function() {
+      loadGlobals();
+      // If we were blocked waiting for auth in boot, resume boot
+      if (!isBooting && document.getElementById('i_quote').value === "") {
+          boot();
+      }
+  };
+
 
   // --- VOUCHER MODE LOGIC ---
   function toggleVoucherMode() {
@@ -680,7 +667,7 @@
     const itinerary = getItineraryData(quoteId);
 
     try {
-        const response = await fetch('/api/saveItinerary', {
+        const response = await fetchWithAuth('/api/saveItinerary', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(itinerary)
@@ -824,17 +811,43 @@
         if (!editId) {
             // Client Mode (Read Only)
             document.body.classList.add('client-view');
-            document.getElementById('auth-overlay').style.display = 'none';
+            const isAuth = await initAuth();
+            if (!isAuth) {
+                document.getElementById('auth-overlay').style.display = 'flex';
+                document.getElementById('auth-overlay').style.opacity = '1';
+                
+                // Add a notice about the temporary restriction
+                const loginBox = document.querySelector('.auth-card');
+                if (loginBox && !document.getElementById('client-notice')) {
+                    const notice = document.createElement('div');
+                    notice.id = 'client-notice';
+                    notice.style.cssText = "background: #fff3cd; color: #856404; padding: 15px; margin-bottom: 20px; border-radius: 8px; font-size: 14px; text-align: left; border: 1px solid #ffeeba;";
+                    notice.innerHTML = "<strong>Notice for Customers:</strong> Unauthenticated customer-sharing links are temporarily disabled until secure share links are implemented. Please wait for an updated secure link from your agent, or ask your agent to log in here to view this itinerary.";
+                    loginBox.insertBefore(notice, loginBox.firstChild);
+                }
+                
+                return; // Wait for login
+            } else {
+                loadGlobals();
+            }
         } else {
             // Edit Mode (Load into editor)
-            init(); // still initialize local draft so we can overwrite it
+            const isAuth = await initAuth();
+            if (!isAuth) {
+                document.getElementById('auth-overlay').style.display = 'flex';
+                document.getElementById('auth-overlay').style.opacity = '1';
+                // Execution stops here. window.onLoginSuccess will call boot() later.
+                return;
+            } else {
+                loadGlobals();
+            }
         }
 
         const loader = document.getElementById('loader-overlay');
         if(loader) loader.style.display = 'flex';
 
         try {
-            const response = await fetch(`/api/getItinerary/${activeId}`);
+            const response = await fetchWithAuth(`/api/getItinerary/${activeId}`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             
             const result = await response.json();
@@ -855,7 +868,14 @@
         }
     } else {
         // Normal Agent Mode (Load draft)
-        init();
+        const isAuth = await initAuth();
+        if (!isAuth) {
+            document.getElementById('auth-overlay').style.display = 'flex';
+            document.getElementById('auth-overlay').style.opacity = '1';
+        } else {
+            loadGlobals();
+            init();
+        }
     }
   }
 
