@@ -1,17 +1,17 @@
 const { createClient } = require('@supabase/supabase-js');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-// Use Service Role Key for backend operations to bypass RLS,
+// Use Secret Key for backend operations to bypass RLS,
 // allowing us to enforce strict logic and concurrency checks in code.
 let supabase = null;
-if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
-    supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+if (SUPABASE_URL && SUPABASE_SECRET_KEY) {
+    supabase = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY);
 }
 
 function checkInit() {
-    if (!supabase) throw new Error("Supabase is not configured. Missing SUPABASE_SERVICE_ROLE_KEY.");
+    if (!supabase) throw new Error("Supabase is not configured. Missing SUPABASE_SECRET_KEY.");
 }
 
 async function getItinerary(quoteId, user, userRole) {

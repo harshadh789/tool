@@ -4,7 +4,7 @@ const { createItinerary, getItinerary, updateItinerary, listItineraries, changeS
 async function runTests() {
     console.log("=== Phase 2A Database Tests ===");
 
-    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    if (!process.env.SUPABASE_URL || (!process.env.SUPABASE_SECRET_KEY && !process.env.SUPABASE_SERVICE_ROLE_KEY)) {
         console.log("[BLOCKED] Supabase Service Role Key is missing.");
         console.log("Tests require a real Supabase instance to test PostgreSQL RLS, constraints, and optimistic concurrency.");
         

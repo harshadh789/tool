@@ -13,18 +13,24 @@ app.use(express.json({ limit: '50mb' }));
 // Serve static frontend files
 app.use(express.static(path.join(__dirname, '../')));
 
-// Initialize Supabase
+// Initialize Supabase (Public Client for Auth Validation)
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY;
+const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 let supabase = null;
-if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let supabaseAdmin = null;
+if (SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY) {
+    supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+}
+if (SUPABASE_URL && SUPABASE_SECRET_KEY) {
+    supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY);
 }
 
 // Middleware to check Supabase Auth
 async function requireAuth(req, res, next) {
-    if (!supabase) {
-        return res.status(500).json({ success: false, error: 'Authentication is not configured on the server. Please set SUPABASE_URL and SUPABASE_ANON_KEY in .env' });
+    if (!supabase || !supabaseAdmin) {
+        return res.status(500).json({ success: false, error: 'Authentication is not fully configured on the server.' });
     }
 
     const authHeader = req.headers.authorization;
@@ -41,17 +47,26 @@ async function requireAuth(req, res, next) {
 
     req.user = user;
     
-    // Check Role
+    // Check Role using privileged client
     try {
-        const { data: profile } = await supabase
+        const { data: profile, error: profileError } = await supabaseAdmin
             .from('user_roles')
-            .select('role')
+            .select('role, is_active')
             .eq('user_id', user.id)
             .single();
             
-        req.userRole = profile ? profile.role : 'USER'; 
+        if (profileError || !profile || profile.is_active !== true) {
+            return res.status(403).json({ success: false, error: 'Forbidden: Account inactive or role unassigned.' });
+        }
+        
+        const validRoles = ['ADMIN', 'SALES', 'OPS'];
+        if (!validRoles.includes(profile.role)) {
+            return res.status(403).json({ success: false, error: 'Forbidden: Invalid role assignment.' });
+        }
+        
+        req.userRole = profile.role; 
     } catch (e) {
-        req.userRole = 'USER';
+        return res.status(500).json({ success: false, error: 'Internal server error during role validation.' });
     }
 
     next();
@@ -112,10 +127,29 @@ async function findFileByName(token, fileName) {
 // --- API Routes ---
 
 app.get('/api/auth/config', (req, res) => {
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
         return res.status(500).json({ success: false, error: 'Supabase configuration missing on server.' });
     }
-    res.json({ success: true, url: SUPABASE_URL, key: SUPABASE_ANON_KEY });
+    // Only return the safe publishable key to the client. The secret key is never sent.
+    res.json({ success: true, url: SUPABASE_URL, key: SUPABASE_PUBLISHABLE_KEY });
+});
+
+// Safe configuration validation endpoint
+app.get('/api/admin/config-check', requireAuth, (req, res) => {
+    if (req.userRole !== 'ADMIN') {
+        return res.status(403).json({ success: false, error: 'Forbidden' });
+    }
+    const envVars = {
+        SUPABASE_URL: !!process.env.SUPABASE_URL,
+        SUPABASE_PUBLISHABLE_KEY: !!process.env.SUPABASE_PUBLISHABLE_KEY,
+        SUPABASE_ANON_KEY: !!process.env.SUPABASE_ANON_KEY,
+        SUPABASE_SECRET_KEY: !!process.env.SUPABASE_SECRET_KEY,
+        SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+        ZOHO_CLIENT_ID: !!process.env.ZOHO_CLIENT_ID,
+        ZOHO_WORKDRIVE_FOLDER_ID: !!process.env.ZOHO_WORKDRIVE_FOLDER_ID
+    };
+    const missing = Object.keys(envVars).filter(k => !envVars[k]);
+    res.json({ success: true, configured: envVars, missing_potential: missing });
 });
 
 // Setup Auth Routes

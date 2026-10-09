@@ -9,7 +9,7 @@ const ZOHO_WORKDRIVE_API = 'https://workdrive.zoho.in/api/v1';
 const ZOHO_WORKDRIVE_FOLDER_ID = process.env.ZOHO_WORKDRIVE_FOLDER_ID;
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 let accessToken = null;
 
@@ -35,7 +35,7 @@ async function getZohoToken() {
 async function runDryRun() {
     console.log("=== Phase 2A Migration Dry-Run ===");
     
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    if (!SUPABASE_URL || !SUPABASE_SECRET_KEY) {
         console.log("[WARNING] Supabase Service Role Key is missing. Dry-run will only analyze WorkDrive records.");
     }
 
