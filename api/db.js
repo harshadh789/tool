@@ -46,11 +46,8 @@ async function listItineraries(user, userRole) {
     checkInit();
     let query = supabase.from('itineraries').select('id, quote_id, status, is_voucher_mode, guest_name, title, start_date, end_date, guest_count, total_amount, currency, owner_id, version, updated_at');
     
-    if (userRole === 'ADMIN' || userRole === 'OPS') {
+    if (userRole === 'ADMIN' || userRole === 'OPS' || userRole === 'SALES') {
         // Can see all
-    } else if (userRole === 'SALES') {
-        // Sales only see their own
-        query = query.eq('owner_id', user.id);
     } else {
         throw new Error("Unauthorized role.");
     }

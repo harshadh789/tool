@@ -166,7 +166,13 @@ async function runDryRun() {
     console.log("\nSample Proposed Record mapping:");
     if (report.proposedImports.length > 0) {
         const sample = report.proposedImports[0];
-        console.log(JSON.stringify({ ...sample, content: "[OMITTED FULL PAYLOAD]" }, null, 2));
+        console.log(JSON.stringify({ 
+            ...sample, 
+            guest_name: "[REDACTED]",
+            guest_count: "[REDACTED]",
+            total_amount: "[REDACTED]",
+            content: "[OMITTED FULL PAYLOAD]" 
+        }, null, 2));
     }
     
     console.log("\nMigration strategy: Records will be imported retaining their full original JSON payload in the 'content' column to prevent data loss. 'owner_id' will default to NULL (Unassigned) since legacy WorkDrive records lack verified ownership mapping. Admins must assign owners post-migration.");

@@ -154,46 +154,22 @@ app.get('/api/admin/config-check', requireAuth, (req, res) => {
 
 // Setup Auth Routes
 app.get('/auth', (req, res) => {
-    // Scopes for Bigin and WorkDrive
-    const scopes = "ZohoBigin.modules.ALL,ZohoBigin.settings.ALL,WorkDrive.files.ALL,WorkDrive.workspace.ALL";
-    const authUrl = `${ZOHO_API_DOMAIN}/oauth/v2/auth?scope=${scopes}&client_id=${ZOHO_CLIENT_ID}&response_type=code&access_type=offline&redirect_uri=${REDIRECT_URI}&prompt=consent`;
-    res.redirect(authUrl);
+    // Disabled for security. Reauthorization requires a separate secure, deliberate workflow.
+    res.status(403).send("<h1>Forbidden</h1><p>OAuth endpoints are disabled. Reauthorization requires a deliberate, secure administrative workflow.</p>");
 });
 
 app.get('/callback', async (req, res) => {
-    const code = req.query.code;
-    if (!code) return res.send("No authorization code provided.");
-
-    try {
-        const response = await axios.post(`${ZOHO_API_DOMAIN}/oauth/v2/token`, null, {
-            params: {
-                grant_type: 'authorization_code',
-                client_id: ZOHO_CLIENT_ID,
-                client_secret: ZOHO_CLIENT_SECRET,
-                redirect_uri: REDIRECT_URI,
-                code: code
-            }
-        });
-
-        if (response.data.refresh_token) {
-            let envContent = fs.readFileSync('.env', 'utf8');
-            if(envContent.includes('ZOHO_REFRESH_TOKEN=')) {
-                envContent = envContent.replace(/ZOHO_REFRESH_TOKEN=.*/, `ZOHO_REFRESH_TOKEN=${response.data.refresh_token}`);
-            } else {
-                envContent += `\nZOHO_REFRESH_TOKEN=${response.data.refresh_token}`;
-            }
-            fs.writeFileSync('.env', envContent);
-            res.send("<h1>Success!</h1><p>Permanent Refresh token has been saved to .env file! You can now use the Itinerary tool, it is connected to Zoho WorkDrive!</p>");
-        } else {
-            res.send("<h1>Warning</h1><p>No refresh token received. You might need to revoke access in Zoho API console and try again.</p><pre>" + JSON.stringify(response.data, null, 2) + "</pre>");
-        }
-    } catch (error) {
-        res.send("<h1>Error</h1><pre>" + (error.response ? JSON.stringify(error.response.data, null, 2) : error.message) + "</pre>");
-    }
+    // Disabled for security. 
+    res.status(403).send("<h1>Forbidden</h1><p>OAuth endpoints are disabled.</p>");
 });
 
 // Save Itinerary
 app.post('/api/saveItinerary', requireAuth, async (req, res) => {
+    // Write access is temporarily restricted to Admin because WorkDrive does not support safe atomic ownership checks.
+    if (req.userRole !== 'ADMIN') {
+        return res.status(403).json({ success: false, error: 'Forbidden: Write access is temporarily restricted to Administrators pending database migration.' });
+    }
+
     try {
         const itinerary = req.body;
         if (!itinerary.id) return res.status(400).json({ success: false, error: 'Missing Quotation Number (ID)' });
@@ -218,22 +194,16 @@ app.post('/api/saveItinerary', requireAuth, async (req, res) => {
         console.log(`Saved itinerary ${fileName} to WorkDrive.`);
         res.json({ success: true, message: 'Itinerary saved successfully.' });
     } catch (error) {
-        console.error("Error saving itinerary:", error.response ? error.response.data : error.message);
+        console.error("Error saving itinerary:", error.message);
         res.status(500).json({ 
             success: false, 
-            error: 'Error saving itinerary to Zoho.',
-            details: error.response ? error.response.data : error.message,
-            envKeys: Object.keys(process.env).filter(k => k.startsWith('ZOHO_')) 
+            error: 'Failed to sync itinerary with cloud storage. Please try again later.'
         });
     }
 });
 
 // List all Itineraries in the WorkDrive folder
 app.get('/api/listItineraries', requireAuth, async (req, res) => {
-    if (req.userRole !== 'ADMIN') {
-        return res.status(403).json({ success: false, error: 'Forbidden: Admin access required to view all quotations.' });
-    }
-    
     try {
         const token = await getZohoToken();
         const response = await axios.get(`${ZOHO_WORKDRIVE_API}/files/${ZOHO_WORKDRIVE_FOLDER_ID}/files`, {

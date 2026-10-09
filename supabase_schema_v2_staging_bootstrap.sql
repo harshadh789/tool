@@ -100,29 +100,28 @@ USING (
 
 -- SALES: INSERT
 DROP POLICY IF EXISTS "Sales can insert owned or unassigned itineraries" ON public.itineraries;
-CREATE POLICY "Sales can insert owned or unassigned itineraries"
+DROP POLICY IF EXISTS "Sales can insert owned itineraries" ON public.itineraries;
+CREATE POLICY "Sales can insert owned itineraries"
 ON public.itineraries
 FOR INSERT
 WITH CHECK (
   EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'SALES' AND is_active = true)
-  AND
-  (owner_id = auth.uid() OR owner_id IS NULL)
+  AND owner_id = auth.uid()
 );
 
 -- SALES: UPDATE
 DROP POLICY IF EXISTS "Sales can update owned or unassigned itineraries" ON public.itineraries;
-CREATE POLICY "Sales can update owned or unassigned itineraries"
+DROP POLICY IF EXISTS "Sales can update owned itineraries" ON public.itineraries;
+CREATE POLICY "Sales can update owned itineraries"
 ON public.itineraries
 FOR UPDATE
 USING (
   EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'SALES' AND is_active = true)
-  AND
-  (owner_id = auth.uid() OR owner_id IS NULL)
+  AND owner_id = auth.uid()
 )
 WITH CHECK (
   EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'SALES' AND is_active = true)
-  AND
-  (owner_id = auth.uid() OR owner_id IS NULL)
+  AND owner_id = auth.uid()
 );
 
 -- OPS: SELECT
