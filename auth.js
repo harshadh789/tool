@@ -18,6 +18,22 @@ async function initAuth() {
         
         if (session) {
             currentSession = session;
+            
+            // Handle invitation and password setup
+            if (window.location.hash.includes('type=invite') || window.location.hash.includes('type=recovery')) {
+                setTimeout(async () => {
+                    const newPassword = prompt("Please set your new password (minimum 6 characters):");
+                    if (newPassword && newPassword.length >= 6) {
+                        const { error: updateError } = await supabaseClient.auth.updateUser({ password: newPassword });
+                        if (updateError) alert("Error setting password: " + updateError.message);
+                        else alert("Password set successfully! You can now log in normally.");
+                    } else {
+                        alert("Password setup cancelled or invalid. You must set a password to retain access.");
+                    }
+                    window.location.hash = ''; // Clear hash securely
+                }, 500); // slight delay to ensure UI is ready
+            }
+            
             return true;
         }
         return false;

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>User Management - Campfly Admin</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="dashboard.css">
+  <style>
+    .modal-overlay {
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.5); display: none;
+        align-items: center; justify-content: center; z-index: 1000;
+    }
+    .modal-content {
+        background: white; padding: 30px; border-radius: 12px;
+        width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
+    .modal-content h3 { margin-top: 0; }
+    .form-group { margin-bottom: 15px; }
+    .form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 5px; color: #475569; }
+    .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+    .btn-secondary { background: #e2e8f0; color: #475569; }
+    .badge-active { background: #dcfce7; color: #16a34a; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+    .badge-inactive { background: #fee2e2; color: #ef4444; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <i class="fa-solid fa-plane-departure"></i> Campfly Admin
+    </div>
+    <ul class="nav-links">
+      <li><a href="dashboard.html"><i class="fa-solid fa-chart-pie"></i> Overview</a></li>
+      <li><a href="index.html"><i class="fa-solid fa-pen-to-square"></i> New Itinerary</a></li>
+      <li><a href="#"><i class="fa-solid fa-users"></i> Customers</a></li>
+      <li id="nav_team"><a href="users.html" class="active"><i class="fa-solid fa-user-shield"></i> Team</a></li>
+      <li><a href="#"><i class="fa-solid fa-gear"></i> Settings</a></li>
+    </ul>
+    <div class="user-profile">
+      <div class="avatar"><i class="fa-solid fa-user"></i></div>
+      <div class="info">
+        <strong id="dash_user_role">...</strong>
+        <span id="dash_user_email">...</span>
+      </div>
+      <button onclick="handleLogout()" style="margin-left:auto; background:none; border:none; color:#ef4444; cursor:pointer;" title="Logout"><i class="fa-solid fa-arrow-right-from-bracket"></i></button>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <header class="top-bar">
+      <h2><i class="fa-solid fa-user-shield"></i> User Management</h2>
+      <button class="btn" onclick="openInviteModal()"><i class="fa-solid fa-user-plus"></i> Invite User</button>
+    </header>
+
+    <div class="table-container" style="margin-top: 20px;">
+      <div class="table-header">
+        <h3>Active & Inactive Team Members</h3>
+        <button class="btn-refresh" onclick="fetchUsers()"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
+      </div>
+      <table id="users_table">
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th>Joined</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="users_table_body">
+          <tr><td colspan="5" style="text-align:center; padding: 30px;"><i class="fa-solid fa-spinner fa-spin"></i> Loading users...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- Invite Modal -->
+  <div id="invite_modal" class="modal-overlay">
+    <div class="modal-content">
+      <h3>Invite New User</h3>
+      <div id="invite_error" style="color:#ef4444; font-size:13px; margin-bottom:10px;"></div>
+      <div class="form-group">
+        <label>Email Address</label>
+        <input type="email" id="invite_email" placeholder="agent@campfly.in">
+      </div>
+      <div class="form-group">
+        <label>Role</label>
+        <select id="invite_role">
+          <option value="SALES">SALES</option>
+          <option value="OPS">OPS</option>
+          <option value="ADMIN">ADMIN</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeInviteModal()">Cancel</button>
+        <button class="btn" id="btn_invite_submit" onclick="submitInvite()">Send Invite</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Edit Modal -->
+  <div id="edit_modal" class="modal-overlay">
+    <div class="modal-content">
+      <h3>Edit User</h3>
+      <div id="edit_error" style="color:#ef4444; font-size:13px; margin-bottom:10px;"></div>
+      <input type="hidden" id="edit_user_id">
+      <div class="form-group">
+        <label>Email Address</label>
+        <input type="email" id="edit_email" disabled>
+      </div>
+      <div class="form-group">
+        <label>Role</label>
+        <select id="edit_role">
+          <option value="SALES">SALES</option>
+          <option value="OPS">OPS</option>
+          <option value="ADMIN">ADMIN</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Status</label>
+        <select id="edit_status">
+          <option value="true">Active</option>
+          <option value="false">Inactive</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+        <button class="btn" id="btn_edit_submit" onclick="submitEdit()">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="auth.js"></script>
+  <script src="users.js"></script>
+</body>
+</html>

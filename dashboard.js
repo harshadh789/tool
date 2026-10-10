@@ -9,9 +9,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     
     // Update profile
-    const emailEl = document.getElementById('dash_user_email');
-    if (emailEl && currentSession && currentSession.user) {
-        emailEl.innerText = currentSession.user.email;
+    try {
+        const meRes = await fetchWithAuth('/api/me');
+        if (meRes.success && meRes.user) {
+            const roleEl = document.getElementById('dash_user_role');
+            const emailEl = document.getElementById('dash_user_email');
+            const teamNav = document.getElementById('nav_team');
+            
+            if (roleEl) roleEl.innerText = meRes.user.role;
+            if (emailEl) emailEl.innerText = meRes.user.email;
+            if (teamNav && meRes.user.role === 'ADMIN') {
+                teamNav.style.display = 'block';
+            }
+        }
+    } catch (e) {
+        console.error("Failed to load user profile", e);
     }
 
     fetchData();

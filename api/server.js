@@ -170,6 +170,218 @@ app.get('/api/admin/config-check', requireAuth, (req, res) => {
     res.json({ success: true, configured: envVars, missing_potential: missing });
 });
 
+// --- User Management Routes ---
+app.get('/api/me', requireAuth, (req, res) => {
+    res.json({
+        success: true,
+        user: {
+            id: req.user.id,
+            email: req.user.email,
+            role: req.userRole,
+            is_active: true
+        }
+    });
+});
+
+app.get('/api/users', requireAuth, async (req, res) => {
+    if (req.userRole !== 'ADMIN') return res.status(403).json({ success: false, error: 'Forbidden' });
+    try {
+        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.listUsers();
+        if (authError) throw authError;
+        const { data: rolesData, error: rolesError } = await supabaseAdmin.from('user_roles').select('*');
+        if (rolesError) throw rolesError;
+        
+        const users = authData.users.map(u => {
+            const roleObj = rolesData.find(r => r.user_id === u.id) || { role: 'UNASSIGNED', is_active: false };
+            return {
+                id: u.id,
+                email: u.email,
+                role: roleObj.role,
+                is_active: roleObj.is_active,
+                created_at: u.created_at,
+                last_sign_in_at: u.last_sign_in_at,
+                confirmed_at: u.confirmed_at || u.email_confirmed_at
+            };
+        });
+        res.json({ success: true, users });
+    } catch (e) {
+        console.error("List users error:", e);
+        res.status(500).json({ success: false, error: 'Failed to list users.' });
+    }
+});
+
+app.post('/api/users', requireAuth, async (req, res) => {
+    if (req.userRole !== 'ADMIN') return res.status(403).json({ success: false, error: 'Forbidden' });
+    const { email, role } = req.body;
+    if (!email || !['ADMIN', 'SALES', 'OPS'].includes(role)) {
+        return res.status(400).json({ success: false, error: 'Invalid email or role.' });
+    }
+    try {
+        const inviteOptions = {
+            redirectTo: process.env.NODE_ENV === 'production' || process.env.VERCEL 
+                ? 'https://campfly-itinerary.vercel.app/dashboard.html'
+                : 'http://localhost:3000/dashboard.html'
+        };
+        const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, inviteOptions);
+        if (inviteError) throw inviteError;
+        
+        const userId = inviteData.user.id;
+        const { error: roleError } = await supabaseAdmin.from('user_roles').insert([{
+            user_id: userId,
+            role: role,
+            is_active: true
+        }]);
+        
+        if (roleError) {
+            console.error("Role assignment failed for invited user:", userId, roleError);
+            return res.status(500).json({ success: false, error: 'User invited but role assignment failed. Please set role manually or retry.' });
+        }
+        
+        res.json({ success: true, message: 'User invited and role assigned successfully.', user_id: userId });
+    } catch (e) {
+        console.error("Invite user error:", e);
+        res.status(500).json({ success: false, error: 'Failed to invite user.' });
+    }
+});
+
+app.patch('/api/users/:id', requireAuth, async (req, res) => {
+    if (req.userRole !== 'ADMIN') return res.status(403).json({ success: false, error: 'Forbidden' });
+    const targetId = req.params.id;
+    if (targetId === req.user.id) {
+        return res.status(400).json({ success: false, error: 'Cannot modify your own account.' });
+    }
+    const { role, is_active } = req.body;
+    
+    if ((role && role !== 'ADMIN') || is_active === false) {
+        const { data: targetRoleData, error: trErr } = await supabaseAdmin.from('user_roles').select('role, is_active').eq('user_id', targetId).maybeSingle();
+        if (trErr) return res.status(500).json({ success: false, error: 'Failed to verify target user role.' });
+        
+        if (targetRoleData && targetRoleData.role === 'ADMIN' && targetRoleData.is_active) {
+            const { count, error: countErr } = await supabaseAdmin.from('user_roles').select('*', { count: 'exact', head: true }).eq('role', 'ADMIN').eq('is_active', true);
+            if (countErr) return res.status(500).json({ success: false, error: 'Failed to verify admin count.' });
+            if (count <= 1) {
+                return res.status(400).json({ success: false, error: 'Cannot demote or deactivate the last active ADMIN.' });
+            }
+        }
+    }
+    
+    const updates = {};
+    if (role && ['ADMIN', 'SALES', 'OPS'].includes(role)) updates.role = role;
+    if (typeof is_active === 'boolean') updates.is_active = is_active;
+    
+    if (Object.keys(updates).length === 0) return res.status(400).json({ success: false, error: 'No valid updates provided.' });
+    
+    try {
+        // Repair partial invitation recovery: verify user exists in Auth
+        const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.getUserById(targetId);
+        if (authErr || !authData.user) {
+            return res.status(404).json({ success: false, error: 'Target user not found in Auth.' });
+        }
+
+        const { data: existingRole, error: existingErr } = await supabaseAdmin.from('user_roles').select('*').eq('user_id', targetId).single();
+        
+        if (existingRole) {
+            const { error: updateError } = await supabaseAdmin.from('user_roles').update(updates).eq('user_id', targetId);
+            if (updateError) throw updateError;
+        } else {
+            const { error: insertError } = await supabaseAdmin.from('user_roles').insert([{
+                user_id: targetId,
+                role: updates.role || 'SALES',
+                is_active: updates.is_active !== undefined ? updates.is_active : true
+            }]);
+            if (insertError) throw insertError;
+        }
+        
+        res.json({ success: true, message: 'User updated successfully.' });
+    } catch (e) {
+        console.error("Update user error:", e);
+        res.status(500).json({ success: false, error: 'Failed to update user.' });
+    }
+});
+
+app.post('/api/users/:id/resend', requireAuth, async (req, res) => {
+    if (req.userRole !== 'ADMIN') return res.status(403).json({ success: false, error: 'Forbidden' });
+    const targetId = req.params.id;
+    
+    try {
+        const { data: userData, error: userError } = await supabaseAdmin.auth.admin.getUserById(targetId);
+        if (userError) throw userError;
+        
+        const user = userData.user;
+        const isConfirmed = !!(user.confirmed_at || user.email_confirmed_at);
+        
+        if (!isConfirmed) {
+            return res.status(400).json({ success: false, error: 'Unsupported action: Cannot reliably resend invitation to unconfirmed account via this API.' });
+        }
+        
+        // Active account: Send Password Reset
+        const redirectUrl = process.env.NODE_ENV === 'production' || process.env.VERCEL 
+            ? 'https://campfly-itinerary.vercel.app/dashboard.html'
+            : 'http://localhost:3000/dashboard.html';
+            
+        const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(user.email, {
+            redirectTo: redirectUrl
+        });
+        if (resetError) throw resetError;
+        
+        res.json({ success: true, message: 'Password reset email sent.' });
+    } catch (e) {
+        console.error("Password reset error:", e);
+        res.status(500).json({ success: false, error: 'Failed to process request.' });
+    }
+});
+
+app.delete('/api/users/:id', requireAuth, async (req, res) => {
+    if (req.userRole !== 'ADMIN') return res.status(403).json({ success: false, error: 'Forbidden' });
+    const targetId = req.params.id;
+    
+    if (targetId === req.user.id) {
+        return res.status(400).json({ success: false, error: 'Cannot delete your own account.' });
+    }
+    
+    try {
+        // Must be deactivated first
+        const { data: roleData, error: roleError } = await supabaseAdmin.from('user_roles').select('is_active, role').eq('user_id', targetId).maybeSingle();
+        if (roleError) throw roleError;
+        if (roleData && roleData.is_active) {
+            return res.status(400).json({ success: false, error: 'User must be deactivated before deletion.' });
+        }
+        
+        // Check linked records
+        const { count: itineraryCount, error: itineraryError } = await supabaseAdmin.from('itineraries')
+            .select('id', { count: 'exact', head: true }).eq('owner_id', targetId);
+        if (itineraryError) throw itineraryError;
+        
+        const { count: statusCount, error: statusError } = await supabaseAdmin.from('status_history')
+            .select('id', { count: 'exact', head: true }).eq('user_id', targetId);
+        if (statusError) throw statusError;
+            
+        const { count: shareCount, error: shareError } = await supabaseAdmin.from('secure_share_links')
+            .select('id', { count: 'exact', head: true }).eq('created_by', targetId);
+        if (shareError) throw shareError;
+            
+        if (itineraryCount > 0 || statusCount > 0 || shareCount > 0) {
+            return res.status(400).json({ success: false, error: 'Cannot delete user with linked business or audit records. Please keep deactivated.' });
+        }
+        
+        // Preflight: Ensure this is not the last active ADMIN.
+        // Even though user must be deactivated before deletion, let's verify just in case
+        // the trigger handles it, but we can do a soft preflight if they somehow were active.
+        
+        // Attempt deletion via auth.admin (will cascade to user_roles)
+        const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(targetId);
+        if (deleteError) throw deleteError;
+        
+        res.json({ success: true, message: 'User deleted successfully.' });
+    } catch (e) {
+        console.error("Delete user error:", e);
+        if (e.message && e.message.includes('Concurrency block')) {
+            return res.status(400).json({ success: false, error: 'Cannot delete the last active ADMIN.' });
+        }
+        res.status(500).json({ success: false, error: 'Failed to delete user.' });
+    }
+});
+
 // Setup Auth Routes
 app.get('/auth', (req, res) => {
     // Disabled for security. Reauthorization requires a separate secure, deliberate workflow.
@@ -387,10 +599,16 @@ app.get('/api/getItinerary/:id', requireAuth, async (req, res) => {
     }
 });
 
-if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL && require.main === module) {
     const PORT = process.env.PORT || 3000;
     app.listen(PORT, () => {
         console.log(`Server is running on http://localhost:${PORT}`);
     });
 }
+
+app.setDependencies = (mockSupabase, mockSupabaseAdmin) => {
+    if (mockSupabase) supabase = mockSupabase;
+    if (mockSupabaseAdmin) supabaseAdmin = mockSupabaseAdmin;
+};
+
 module.exports = app;
