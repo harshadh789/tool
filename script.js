@@ -63,14 +63,14 @@
   }
 
   // --- CONFIG LOADER ---
-  function loadGlobals() {
-      // Hardcoded global configuration since backend is removed
+  function loadBankConfig() {
+      // Hardcoded global configuration
       const config = {
           footerLogo: "https://www.campfly.in/assets/logo-cropped.png",
           bkName: "CAMPFLY TOURS LLP",
           bkAcc: "10292311723",
           bkIfsc: "IDFB0080511",
-          bkUpi: "campfly@idfcbank"
+          bkUpi: "Campfly@idfcbank"
       };
       
       const elFooterLogo = document.getElementById('i_footer_logo');
@@ -88,6 +88,7 @@
   }
 
   window.onLoginSuccess = function() {
+      loadBankConfig();
       loadGlobals();
       // If we were blocked waiting for auth in boot, resume boot
       if (!isBooting && document.getElementById('i_quote').value === "") {
@@ -234,6 +235,7 @@
   }
 
   function loadGlobals() {
+    loadBankConfig();
     const g = JSON.parse(localStorage.getItem('campfly_globals'));
     if(!g) return;
     const setIfExist = (id, val) => { if(val !== undefined && document.getElementById(id)) document.getElementById(id).value = val; };
@@ -700,7 +702,19 @@
         if (data.version) {
             currentRecordVersion = data.version;
         }
-        if (!data.success) throw new Error(data.error || "Failed to save to backend.");
+        if (!data.success) {
+            if (response.status === 409 || (data.error && data.error.includes("Concurrency Conflict"))) {
+                if (typeof showToast === 'function') {
+                    showToast("⚠️ Conflict: Modified by someone else. Please reload.");
+                }
+                const reloadNow = confirm("Concurrency Conflict: This itinerary has been modified by someone else since you loaded it.\n\nTo prevent silent overwrites, your save was cancelled.\n\nWould you like to reload the latest version now?");
+                if (reloadNow) {
+                    window.location.reload();
+                }
+                return;
+            }
+            throw new Error(data.error || "Failed to save to backend.");
+        }
         
         if (isSilent) {
             if (isSilent !== 'auto') showToast("Draft Saved to Cloud!");

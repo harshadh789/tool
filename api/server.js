@@ -406,7 +406,16 @@ app.post('/api/saveItinerary', requireAuth, async (req, res) => {
         }
         try {
             const payload = req.body.itinerary || req.body;
-            const version = req.body.version || null;
+            let version = req.body.version;
+            if (version === undefined || version === null) {
+                if (req.body.itinerary && req.body.itinerary.version !== undefined && req.body.itinerary.version !== null) {
+                    version = req.body.itinerary.version;
+                } else if (payload.version !== undefined && payload.version !== null) {
+                    version = payload.version;
+                } else {
+                    version = null;
+                }
+            }
             if (!payload.id) return res.status(400).json({ success: false, error: 'Missing Quotation Number (ID)' });
             
             let data;
@@ -482,6 +491,69 @@ app.post('/api/saveItinerary', requireAuth, async (req, res) => {
         });
     }
 });
+
+async function handleStatusChange(req, res) {
+    const provider = process.env.STORAGE_PROVIDER;
+    if (provider !== undefined && provider !== 'workdrive' && provider !== 'supabase') {
+        return res.status(500).json({ success: false, error: 'Safety abort: Invalid STORAGE_PROVIDER.' });
+    }
+    const activeProvider = provider === undefined ? 'workdrive' : provider;
+
+    if (activeProvider !== 'supabase') {
+        return res.status(400).json({ success: false, error: 'Atomic status transitions with audit history are only supported when STORAGE_PROVIDER=supabase.' });
+    }
+
+    if (!isSafeSupabaseUrl(process.env.SUPABASE_URL)) {
+        return res.status(500).json({ success: false, error: 'Safety abort: Supabase storage is only permitted in the verified staging environment.' });
+    }
+
+    const quoteId = req.params.id || req.body.quoteId || req.body.id;
+    const newStatus = req.body.status || req.body.newStatus;
+    const version = req.body.version !== undefined ? req.body.version : null;
+
+    if (!quoteId) {
+        return res.status(400).json({ success: false, error: 'Missing Quotation Number (ID)' });
+    }
+    if (!newStatus) {
+        return res.status(400).json({ success: false, error: 'Missing new status.' });
+    }
+    if (version === null || version === undefined) {
+        return res.status(400).json({ success: false, error: 'Missing current version for concurrency check.' });
+    }
+
+    try {
+        const updated = await db.changeStatus(quoteId, newStatus, version, req.user, req.userRole);
+        return res.json({
+            success: true,
+            message: 'Status updated successfully.',
+            data: updated,
+            version: updated.version,
+            status: updated.status
+        });
+    } catch (error) {
+        console.error("Status Change Error:", error.message);
+        if (error.message.includes("Concurrency Conflict")) {
+            return res.status(409).json({ success: false, error: error.message });
+        }
+        if (error.message.includes("Itinerary not found")) {
+            return res.status(404).json({ success: false, error: error.message });
+        }
+        if (error.message.includes("Not authorized") || error.message.includes("Unauthorized role")) {
+            return res.status(403).json({ success: false, error: error.message });
+        }
+        if (error.message.includes("Atomic audit service unavailable") || error.message.includes("Status transitions are disabled")) {
+            return res.status(503).json({ success: false, error: error.message });
+        }
+        if (error.message.includes("Audit log failure")) {
+            return res.status(500).json({ success: false, error: error.message });
+        }
+        return res.status(500).json({ success: false, error: 'Failed to update status. Please try again later.' });
+    }
+}
+
+app.post('/api/itineraries/:id/status', requireAuth, handleStatusChange);
+app.patch('/api/itineraries/:id/status', requireAuth, handleStatusChange);
+app.post('/api/changeStatus', requireAuth, handleStatusChange);
 
 app.get('/api/listItineraries', requireAuth, async (req, res) => {
     const provider = process.env.STORAGE_PROVIDER;

@@ -1,4 +1,5 @@
 require('dotenv').config();
+process.env.STORAGE_PROVIDER = 'workdrive';
 
 // Mock dependencies before requiring server
 const axios = require('axios');

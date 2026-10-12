@@ -1,5 +1,6 @@
 let allItineraries = [];
 let currentTabFilter = 'all';
+let currentUserRole = null;
 
 document.addEventListener("DOMContentLoaded", async () => {
     const isAuth = await initAuth();
@@ -12,6 +13,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
         const meRes = await fetchWithAuth('/api/me');
         if (meRes.success && meRes.user) {
+            currentUserRole = meRes.user.role;
             const roleEl = document.getElementById('dash_user_role');
             const emailEl = document.getElementById('dash_user_email');
             const teamNav = document.getElementById('nav_team');
@@ -125,6 +127,10 @@ function renderTable(searchTerm = "") {
             actions += '<button class="action-btn" title="Edit" onclick="window.open(\'/?edit=' + docId + '\', \'_blank\')"><i class="fa-solid fa-pen"></i></button>';
             actions += '<button class="action-btn" title="View Itinerary" onclick="window.open(\'/?id=' + docId + '\', \'_blank\')"><i class="fa-solid fa-eye"></i></button>';
             actions += '<button class="action-btn" title="Copy Client Link" onclick="copyToClipboard(\'/?id=' + docId + '\')"><i class="fa-solid fa-link"></i></button>';
+        if (currentUserRole === 'ADMIN' || currentUserRole === 'OPS') {
+            if (it.status === 'Requested') {
+                actions += '<button class="action-btn" title="Confirm Itinerary (Ops)" style="color:#16a34a;" onclick="updateItineraryStatus(\'' + docId + '\', \'Confirmed\', ' + (it.version || 1) + ')"><i class="fa-solid fa-check"></i></button>';
+            }
         }
 
         const row = '<tr>' +
@@ -137,6 +143,31 @@ function renderTable(searchTerm = "") {
             '</tr>';
         tbody.insertAdjacentHTML('beforeend', row);
     });
+}
+
+async function updateItineraryStatus(quoteId, newStatus, version) {
+    if (!confirm(`Are you sure you want to change status of ${quoteId} to "${newStatus}"?`)) return;
+    try {
+        const res = await fetchWithAuth(`/api/itineraries/${quoteId}/status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: newStatus, version })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+            if (res.status === 409 || (data.error && data.error.includes("Concurrency Conflict"))) {
+                alert("Concurrency Conflict: This record was modified by another user. Refreshing dashboard...");
+                fetchData();
+                return;
+            }
+            throw new Error(data.error || "Failed to update status");
+        }
+        alert(`Status updated to "${newStatus}" successfully!`);
+        fetchData();
+    } catch(err) {
+        console.error("Status update error:", err);
+        alert("Error updating status: " + err.message);
+    }
 }
 
 function copyToClipboard(path) {
