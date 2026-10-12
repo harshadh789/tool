@@ -427,6 +427,12 @@ app.post('/api/saveItinerary', requireAuth, async (req, res) => {
             if (error.message.includes("Not authorized") || error.message.includes("Only Admin") || error.message.includes("Sales can only edit their own itineraries") || error.message.includes("Legacy unassigned records") || error.message.includes("Ops/Unauthorized")) {
                 return res.status(403).json({ success: false, error: error.message });
             }
+            if (error.message.includes("Atomic audit service unavailable") || error.message.includes("Status transitions are disabled")) {
+                return res.status(503).json({ success: false, error: error.message });
+            }
+            if (error.message.includes("Audit log failure")) {
+                return res.status(500).json({ success: false, error: error.message });
+            }
             return res.status(500).json({ success: false, error: 'Failed to sync itinerary with cloud storage. Please try again later.' });
         }
     }

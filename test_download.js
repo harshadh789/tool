@@ -1,3 +1,4 @@
+require('dotenv').config();
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
@@ -19,8 +20,10 @@ const path = require('path');
     
     await page.goto("http://localhost:8080/");
     
-    await page.type("#login_user", "emp1");
-    await page.type("#login_pass", "123");
+    const testUser = process.env.TEST_USER_NAME || process.env.TEST_USER_EMAIL || 'emp1';
+    const testPass = process.env.TEST_USER_PASSWORD || '';
+    await page.type("#login_user", testUser);
+    await page.type("#login_pass", testPass);
     
     // Call the function directly to login
     await page.evaluate(() => { handleLogin(); });

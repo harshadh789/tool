@@ -1,3 +1,4 @@
+require('dotenv').config();
 const puppeteer = require('puppeteer');
 (async () => {
     const browser = await puppeteer.launch();
@@ -6,8 +7,10 @@ const puppeteer = require('puppeteer');
     await page.goto('http://localhost:3000/');
     
     // Bypass auth
-    await page.type('#login_user', 'emp1');
-    await page.type('#login_pass', 'password123');
+    const testUser = process.env.TEST_USER_NAME || process.env.TEST_USER_EMAIL || 'emp1';
+    const testPass = process.env.TEST_USER_PASSWORD || '';
+    await page.type('#login_user', testUser);
+    await page.type('#login_pass', testPass);
     await page.click('.auth-btn');
     await new Promise(r => setTimeout(r, 1000));
     

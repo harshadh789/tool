@@ -12,3 +12,15 @@ api/test_db.js
 api/test_db_ownership.js
 api/test_migration_logic.js
 tests/
+exchange_token.js
+setup_auth.js
+test_all_buttons.js
+test_db.js
+test_download.js
+test_firebase.js
+test_load.js
+test_sdk.js
+check_errors.js
+download_test.py
+downloads/
+*.sql

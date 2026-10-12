@@ -129,8 +129,62 @@ async function updateItinerary(quoteId, payload, currentVersion, user, userRole)
         throw new Error("Concurrency Conflict: The itinerary has been modified by someone else since you loaded it. Please refresh and try again.");
     }
 
+    const targetStatus = payload.status || existing.status;
+    const isStatusChange = (targetStatus !== existing.status);
+
+    // 1. Authoritative Transactional Path: Call PostgreSQL atomic RPC function
+    if (typeof supabase.rpc === 'function') {
+        const { data: rpcData, error: rpcError } = await supabase.rpc('update_itinerary_status_atomic', {
+            p_quote_id: quoteId,
+            p_current_version: currentVersion,
+            p_user_id: user.id,
+            p_status: targetStatus,
+            p_is_voucher_mode: payload.isVoucherMode !== undefined ? !!payload.isVoucherMode : existing.is_voucher_mode,
+            p_guest_name: payload.guest || existing.guest_name,
+            p_title: payload.title || existing.title,
+            p_start_date: payload.start || existing.start_date,
+            p_end_date: payload.end || existing.end_date,
+            p_guest_count: payload.adults ? parseInt(payload.adults) : existing.guest_count,
+            p_total_amount: payload.baseCost ? parseFloat(payload.baseCost) : existing.total_amount,
+            p_currency: payload.currency || existing.currency,
+            p_content: payload
+        });
+
+        if (!rpcError) {
+            return rpcData;
+        }
+
+        // Handle PostgreSQL error conditions from the RPC transaction
+        if (rpcError.message && rpcError.message.includes('CONCURRENCY_CONFLICT')) {
+            throw new Error("Concurrency Conflict: The itinerary has been modified by someone else since you loaded it. Please refresh and try again.");
+        }
+        if (rpcError.message && rpcError.message.includes('ITINERARY_NOT_FOUND')) {
+            throw new Error("Itinerary not found.");
+        }
+
+        const isRpcMissing = rpcError.code === 'PGRST202' ||
+            (rpcError.message && (
+                rpcError.message.includes('Could not find the function') ||
+                rpcError.message.includes('does not exist')
+            ));
+
+        // If status changed and RPC is missing, FAIL CLOSED to guarantee audit atomicity
+        if (isRpcMissing && isStatusChange) {
+            throw new Error("Atomic audit service unavailable: Required database migration (v4_status_history_atomic) is not installed. Status transitions are disabled until the migration is applied.");
+        }
+
+        // If the error was a real constraint or audit failure within the transaction, propagate it
+        if (!isRpcMissing) {
+            throw new Error(`Audit log failure: ${rpcError.message}`);
+        }
+    } else if (isStatusChange) {
+        // RPC is not supported by client, fail closed for status changes
+        throw new Error("Atomic audit service unavailable: Required database migration (v4_status_history_atomic) is not installed. Status transitions are disabled until the migration is applied.");
+    }
+
+    // 2. Safe Fallback path ONLY for non-status content/field updates
     const updatedRecord = {
-        status: payload.status || existing.status,
+        status: existing.status, // Preserve existing status strictly
         is_voucher_mode: payload.isVoucherMode !== undefined ? !!payload.isVoucherMode : existing.is_voucher_mode,
         guest_name: payload.guest || existing.guest_name,
         title: payload.title || existing.title,
@@ -144,7 +198,6 @@ async function updateItinerary(quoteId, payload, currentVersion, user, userRole)
         updated_at: new Date().toISOString()
     };
 
-    // Use optimistic concurrency condition
     const { data, error } = await supabase
         .from('itineraries')
         .update(updatedRecord)
@@ -155,7 +208,7 @@ async function updateItinerary(quoteId, payload, currentVersion, user, userRole)
         
     if (error) throw error;
     if (!data) throw new Error("Update failed due to version conflict or missing record.");
-    
+
     return data;
 }
 
@@ -169,34 +222,56 @@ async function changeStatus(quoteId, newStatus, currentVersion, user, userRole) 
     if (userRole === 'SALES' && existing.owner_id !== user.id) {
         throw new Error("Not authorized to change status of this itinerary.");
     }
+    if (userRole !== 'ADMIN' && userRole !== 'SALES' && userRole !== 'OPS') {
+        throw new Error("Unauthorized role.");
+    }
 
     if (existing.version !== currentVersion) {
         throw new Error("Concurrency Conflict: The itinerary has been modified. Refresh required.");
     }
-    
-    const { data, error } = await supabase
-        .from('itineraries')
-        .update({
-            status: newStatus,
-            version: existing.version + 1,
-            updated_at: new Date().toISOString()
-        })
-        .eq('quote_id', quoteId)
-        .eq('version', currentVersion)
-        .select()
-        .single();
-        
-    if (error || !data) throw new Error("Status update failed due to conflict.");
 
-    // Log status history
-    await supabase.from('status_history').insert([{
-        itinerary_id: data.id,
-        user_id: user.id,
-        old_status: existing.status,
-        new_status: newStatus
-    }]);
+    if (existing.status === newStatus) {
+        return existing; // No status change with valid version, avoid duplicate audit entry
+    }
 
-    return data;
+    // Authoritative Transactional Path: Call PostgreSQL atomic RPC function
+    if (typeof supabase.rpc !== 'function') {
+        throw new Error("Atomic audit service unavailable: Required database migration (v4_status_history_atomic) is not installed. Status transitions are disabled until the migration is applied.");
+    }
+
+    const { data: rpcData, error: rpcError } = await supabase.rpc('change_itinerary_status_atomic', {
+        p_quote_id: quoteId,
+        p_current_version: currentVersion,
+        p_user_id: user.id,
+        p_new_status: newStatus
+    });
+
+    if (!rpcError) {
+        return rpcData;
+    }
+
+    if (rpcError.message && rpcError.message.includes('CONCURRENCY_CONFLICT')) {
+        throw new Error("Concurrency Conflict: The itinerary has been modified. Refresh required.");
+    }
+    if (rpcError.message && rpcError.message.includes('ITINERARY_NOT_FOUND')) {
+        throw new Error("Itinerary not found.");
+    }
+
+    const isRpcMissing = rpcError.code === 'PGRST202' ||
+        (rpcError.message && (
+            rpcError.message.includes('Could not find the function') ||
+            rpcError.message.includes('does not exist')
+        ));
+
+    if (isRpcMissing) {
+        throw new Error("Atomic audit service unavailable: Required database migration (v4_status_history_atomic) is not installed. Status transitions are disabled until the migration is applied.");
+    }
+
+    throw new Error(`Audit log failure: ${rpcError.message}`);
+}
+
+function setClient(customClient) {
+    supabase = customClient;
 }
 
 module.exports = {
@@ -204,5 +279,6 @@ module.exports = {
     listItineraries,
     createItinerary,
     updateItinerary,
-    changeStatus
+    changeStatus,
+    setClient
 };

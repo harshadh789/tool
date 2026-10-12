@@ -2,9 +2,13 @@ const axios = require('axios');
 const fs = require('fs');
 require('dotenv').config();
 
-const code = '1000.24768489ecb317f4d042b3d4924053a6.a4a5afb026046475c5a55d0c1fc73c31';
+const code = process.env.ZOHO_AUTH_CODE;
 
 async function exchange() {
+    if (!code) {
+        console.error("ERROR: ZOHO_AUTH_CODE environment variable is required.");
+        process.exit(1);
+    }
     try {
         const response = await axios.post(`https://accounts.zoho.in/oauth/v2/token`, null, {
             params: {
