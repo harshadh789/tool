@@ -122,11 +122,12 @@ function renderTable(searchTerm = "") {
         if (isVoucher) {
             actions += '<button class="action-btn" title="Edit" onclick="window.open(\'/?edit=' + docId + '\', \'_blank\')"><i class="fa-solid fa-pen"></i></button>';
             actions += '<button class="action-btn" title="View Voucher" onclick="window.open(\'/?voucher=' + docId + '\', \'_blank\')"><i class="fa-solid fa-eye"></i></button>';
-            actions += '<button class="action-btn" title="Copy Client Link" onclick="copyToClipboard(\'/?voucher=' + docId + '\')"><i class="fa-solid fa-link"></i></button>';
+            actions += '<button class="action-btn" title="Create Secure Customer Link" style="color:var(--primary-color);" onclick="shareCustomerLink(\'' + docId + '\')"><i class="fa-solid fa-share-nodes"></i></button>';
         } else {
             actions += '<button class="action-btn" title="Edit" onclick="window.open(\'/?edit=' + docId + '\', \'_blank\')"><i class="fa-solid fa-pen"></i></button>';
             actions += '<button class="action-btn" title="View Itinerary" onclick="window.open(\'/?id=' + docId + '\', \'_blank\')"><i class="fa-solid fa-eye"></i></button>';
-            actions += '<button class="action-btn" title="Copy Client Link" onclick="copyToClipboard(\'/?id=' + docId + '\')"><i class="fa-solid fa-link"></i></button>';
+            actions += '<button class="action-btn" title="Create Secure Customer Link" style="color:var(--primary-color);" onclick="shareCustomerLink(\'' + docId + '\')"><i class="fa-solid fa-share-nodes"></i></button>';
+        }
         if (currentUserRole === 'ADMIN' || currentUserRole === 'OPS') {
             if (it.status === 'Requested') {
                 actions += '<button class="action-btn" title="Confirm Itinerary (Ops)" style="color:#16a34a;" onclick="updateItineraryStatus(\'' + docId + '\', \'Confirmed\', ' + (it.version || 1) + ')"><i class="fa-solid fa-check"></i></button>';
@@ -178,3 +179,27 @@ function copyToClipboard(path) {
         console.error("Could not copy text: ", err);
     });
 }
+
+async function shareCustomerLink(docId) {
+    try {
+        const res = await fetchWithAuth(`/api/itineraries/${docId}/share`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ expiresInDays: 30 })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+            throw new Error(data.error || "Failed to create share link");
+        }
+        const shareUrl = data.link.url;
+        navigator.clipboard.writeText(shareUrl).then(() => {
+            alert(`✅ Secure Customer Link Generated & Copied!\n\n${shareUrl}\n\n• Token is cryptographically unique\n• Expires in 30 days\n• Excludes internal costs and staff notes`);
+        }).catch(() => {
+            prompt("Secure Customer Link (Copy below):", shareUrl);
+        });
+    } catch(err) {
+        console.error("Share error:", err);
+        alert("Error creating share link: " + err.message);
+    }
+}
+

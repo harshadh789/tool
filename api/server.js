@@ -555,6 +555,121 @@ app.post('/api/itineraries/:id/status', requireAuth, handleStatusChange);
 app.patch('/api/itineraries/:id/status', requireAuth, handleStatusChange);
 app.post('/api/changeStatus', requireAuth, handleStatusChange);
 
+// ==========================================
+// SECURE CUSTOMER ITINERARY SHARING (PHASE 3B)
+// ==========================================
+
+// 1. Authenticated Staff: Create Share Link
+app.post('/api/itineraries/:id/share', requireAuth, async (req, res) => {
+    const quoteId = req.params.id;
+    if (!quoteId) return res.status(400).json({ success: false, error: 'Missing Quote ID.' });
+
+    try {
+        const link = await db.createShareLink(quoteId, req.body || {}, req.user, req.userRole);
+        const host = req.get('host');
+        const proto = req.get('x-forwarded-proto') || req.protocol || 'http';
+        const shareUrl = `${proto}://${host}/view.html?token=${link.token}`;
+
+        return res.json({
+            success: true,
+            link: {
+                ...link,
+                url: shareUrl
+            }
+        });
+    } catch(err) {
+        console.error("Create Share Link Error:", err.message);
+        if (err.message.includes("Itinerary not found")) {
+            return res.status(404).json({ success: false, error: err.message });
+        }
+        if (err.message.includes("Unauthorized") || err.message.includes("only create share links") || err.message.includes("cannot be shared by Sales")) {
+            return res.status(403).json({ success: false, error: err.message });
+        }
+        return res.status(500).json({ success: false, error: 'Failed to create share link: ' + err.message });
+    }
+});
+
+// 2. Authenticated Staff: List Share Links for Itinerary
+app.get('/api/itineraries/:id/shares', requireAuth, async (req, res) => {
+    const quoteId = req.params.id;
+    if (!quoteId) return res.status(400).json({ success: false, error: 'Missing Quote ID.' });
+
+    try {
+        const links = await db.listShareLinks(quoteId, req.user, req.userRole);
+        return res.json({ success: true, links });
+    } catch(err) {
+        console.error("List Share Links Error:", err.message);
+        if (err.message.includes("Itinerary not found")) {
+            return res.status(404).json({ success: false, error: err.message });
+        }
+        if (err.message.includes("Unauthorized") || err.message.includes("only view share links")) {
+            return res.status(403).json({ success: false, error: err.message });
+        }
+        return res.status(500).json({ success: false, error: 'Failed to list share links: ' + err.message });
+    }
+});
+
+// 3. Authenticated Staff: Revoke Share Link
+app.post('/api/shares/:linkId/revoke', requireAuth, async (req, res) => {
+    const linkId = req.params.linkId;
+    if (!linkId) return res.status(400).json({ success: false, error: 'Missing Share Link ID.' });
+
+    try {
+        const result = await db.revokeShareLink(linkId, req.user, req.userRole);
+        return res.json(result);
+    } catch(err) {
+        console.error("Revoke Share Link Error:", err.message);
+        if (err.message.includes("not found")) {
+            return res.status(404).json({ success: false, error: err.message });
+        }
+        if (err.message.includes("Unauthorized") || err.message.includes("only revoke share links")) {
+            return res.status(403).json({ success: false, error: err.message });
+        }
+        return res.status(500).json({ success: false, error: 'Failed to revoke share link: ' + err.message });
+    }
+});
+
+// 4. Public / Customer: Fetch Itinerary by Share Token
+app.get('/api/public/itinerary/:token', async (req, res) => {
+    const token = req.params.token || req.query.token;
+    if (!token) return res.status(400).json({ success: false, error: 'Missing share token.' });
+
+    try {
+        const itinerary = await db.getItineraryByShareToken(token);
+        return res.json({
+            success: true,
+            itinerary
+        });
+    } catch(err) {
+        console.error("Public Itinerary Fetch Error:", err.message);
+        const status = err.statusCode || (err.message.includes("expired") || err.message.includes("revoked") ? 410 : 404);
+        return res.status(status).json({
+            success: false,
+            error: err.message
+        });
+    }
+});
+
+app.get('/api/customer/itinerary', async (req, res) => {
+    const token = req.query.token;
+    if (!token) return res.status(400).json({ success: false, error: 'Missing share token parameter.' });
+
+    try {
+        const itinerary = await db.getItineraryByShareToken(token);
+        return res.json({
+            success: true,
+            itinerary
+        });
+    } catch(err) {
+        const status = err.statusCode || (err.message.includes("expired") || err.message.includes("revoked") ? 410 : 404);
+        return res.status(status).json({
+            success: false,
+            error: err.message
+        });
+    }
+});
+
+
 app.get('/api/listItineraries', requireAuth, async (req, res) => {
     const provider = process.env.STORAGE_PROVIDER;
     if (provider !== undefined && provider !== 'workdrive' && provider !== 'supabase') {

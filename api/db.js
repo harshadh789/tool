@@ -1,5 +1,11 @@
 const { createClient } = require('@supabase/supabase-js');
 const { validateItinerary } = require('../validation.js');
+const crypto = require('crypto');
+
+function hashToken(token) {
+    if (!token || typeof token !== 'string') return '';
+    return crypto.createHash('sha256').update(token.trim()).digest('hex');
+}
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -274,11 +280,316 @@ function setClient(customClient) {
     supabase = customClient;
 }
 
+function filterCustomerItinerary(rawRecord) {
+    if (!rawRecord) return null;
+    const content = rawRecord.content || {};
+
+    const sanitizedDays = Array.isArray(content.days) ? content.days.map((day, idx) => ({
+        dayNumber: idx + 1,
+        title: day.title || '',
+        desc: day.desc || '',
+        img: day.img || '',
+        stay: day.stay || ''
+    })) : [];
+
+    const sanitizedHotels = Array.isArray(content.hotels) ? content.hotels.map(h => ({
+        label: h.label || '',
+        nights: h.nights || '',
+        name: h.name || '',
+        star: h.star || '',
+        room: h.room || '',
+        conf: h.conf || '',
+        meals: h.meals || {}
+    })) : [];
+
+    const safeDocs = Array.isArray(content.documents) ? content.documents.filter(d => !d.isInternal && !d.internal).map(d => ({
+        name: d.name,
+        type: d.type,
+        url: d.url
+    })) : [];
+
+    return {
+        id: rawRecord.quote_id || content.id,
+        quote_id: rawRecord.quote_id || content.id,
+        status: rawRecord.status,
+        isVoucherMode: rawRecord.is_voucher_mode !== undefined ? rawRecord.is_voucher_mode : !!content.isVoucherMode,
+        title: rawRecord.title || content.title || '',
+        guest: rawRecord.guest_name || content.guest || '',
+        adults: rawRecord.guest_count !== undefined ? rawRecord.guest_count : content.adults,
+        start: rawRecord.start_date || content.start || '',
+        end: rawRecord.end_date || content.end || '',
+        duration: content.duration || '',
+        heroImg: content.heroImg || '',
+        genDate: content.genDate || '',
+        validDate: content.validDate || '',
+        
+        repName: content.repName || 'Campfly Travel Expert',
+        repTagline: content.repTagline || '',
+        repAvatar: content.repAvatar || '',
+        repPhone: content.repPhone || '',
+        repEmail: content.repEmail || '',
+        address: content.address || '',
+        socWeb: content.socWeb || 'www.campfly.in',
+        socIg: content.socIg || '@campfly',
+        socYt: content.socYt || '/campfly',
+
+        currency: rawRecord.currency || content.currency || 'INR',
+        costType: content.costType || 'Total Package Cost',
+        baseCost: rawRecord.total_amount !== undefined && rawRecord.total_amount !== null ? rawRecord.total_amount : content.baseCost,
+        discount: content.discount || 0,
+        gstPct: content.gstPct || 5,
+        advAmount: content.advAmount || '',
+        advDate: content.advDate || '',
+        balDate: content.balDate || '',
+        qrToggle: content.qrToggle !== undefined ? content.qrToggle : true,
+
+        flights: content.flights || '',
+        cabDetails: content.cabDetails || '',
+        driverName: content.driverName || '',
+        driverPhone: content.driverPhone || '',
+        pickupInst: content.pickupInst || '',
+
+        days: sanitizedDays,
+        hotels: sanitizedHotels,
+        inc: content.inc || '',
+        exc: content.exc || '',
+        terms: content.terms || '',
+        documents: safeDocs,
+
+        bankDetails: {
+            name: "CAMPFLY TOURS LLP",
+            account: "10292311723",
+            ifsc: "IDFB0080511",
+            upi: "Campfly@idfcbank"
+        }
+    };
+}
+
+async function createShareLink(quoteId, options = {}, user, userRole) {
+    checkInit();
+    
+    const existing = await getItinerary(quoteId, user, 'ADMIN');
+    if (!existing) throw new Error("Itinerary not found.");
+
+    if (userRole === 'SALES') {
+        if (existing.owner_id === null) {
+            throw new Error("Legacy unassigned records cannot be shared by Sales. Contact an Administrator.");
+        }
+        if (existing.owner_id !== user.id) {
+            throw new Error("Sales can only create share links for their own itineraries.");
+        }
+    } else if (userRole !== 'ADMIN' && userRole !== 'OPS') {
+        throw new Error("Unauthorized role for creating share link.");
+    }
+
+    let days = parseInt(options.expiresInDays, 10);
+    if (isNaN(days) || days < 1) days = 30;
+    if (days > 90) days = 90;
+
+    const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = hashToken(rawToken);
+
+    const record = {
+        itinerary_id: existing.id,
+        token_hash: tokenHash,
+        expires_at: expiresAt,
+        created_by: user.id,
+        created_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase
+        .from('secure_share_links')
+        .insert([record])
+        .select('id, itinerary_id, expires_at, created_at, created_by')
+        .single();
+
+    if (error) throw error;
+
+    return {
+        id: data.id,
+        itinerary_id: data.itinerary_id,
+        quote_id: existing.quote_id,
+        token: rawToken,
+        expires_at: data.expires_at,
+        created_at: data.created_at,
+        created_by: data.created_by
+    };
+}
+
+async function listShareLinks(quoteId, user, userRole) {
+    checkInit();
+
+    const existing = await getItinerary(quoteId, user, 'ADMIN');
+    if (!existing) throw new Error("Itinerary not found.");
+
+    if (userRole === 'SALES') {
+        if (existing.owner_id !== user.id) {
+            throw new Error("Sales can only view share links for their own itineraries.");
+        }
+    } else if (userRole !== 'ADMIN' && userRole !== 'OPS') {
+        throw new Error("Unauthorized role.");
+    }
+
+    let query = supabase
+        .from('secure_share_links')
+        .select('id, itinerary_id, expires_at, created_at, created_by')
+        .eq('itinerary_id', existing.id)
+        .order('created_at', { ascending: false });
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const now = new Date();
+    return (data || []).map(link => {
+        const isExpired = link.expires_at ? new Date(link.expires_at) <= now : false;
+        const isRevoked = !!link.revoked_at || (link.expires_at && new Date(link.expires_at).getTime() === 0);
+        return {
+            id: link.id,
+            itinerary_id: link.itinerary_id,
+            quote_id: existing.quote_id,
+            created_at: link.created_at,
+            created_by: link.created_by,
+            expires_at: link.expires_at,
+            revoked_at: link.revoked_at || (isRevoked ? link.expires_at : null),
+            is_active: !isRevoked && !isExpired
+        };
+    });
+}
+
+async function revokeShareLink(linkId, user, userRole) {
+    checkInit();
+
+    const { data: link, error: linkErr } = await supabase
+        .from('secure_share_links')
+        .select('id, itinerary_id, expires_at, created_at, created_by')
+        .eq('id', linkId)
+        .single();
+
+    if (linkErr || !link) {
+        throw new Error("Share link not found.");
+    }
+
+    const { data: parentItin, error: itinErr } = await supabase
+        .from('itineraries')
+        .select('id, quote_id, owner_id')
+        .eq('id', link.itinerary_id)
+        .single();
+
+    if (itinErr || !parentItin) {
+        throw new Error("Associated itinerary not found.");
+    }
+
+    if (userRole === 'SALES') {
+        if (parentItin.owner_id !== user.id) {
+            throw new Error("Sales can only revoke share links for their own itineraries.");
+        }
+    } else if (userRole !== 'ADMIN' && userRole !== 'OPS') {
+        throw new Error("Unauthorized role.");
+    }
+
+    const now = new Date().toISOString();
+    const updatePayload = {
+        expires_at: new Date(0).toISOString()
+    };
+    updatePayload.revoked_at = now;
+
+    let updateRes;
+    try {
+        const { data, error } = await supabase
+            .from('secure_share_links')
+            .update(updatePayload)
+            .eq('id', linkId)
+            .select()
+            .single();
+        if (error) throw error;
+        updateRes = data;
+    } catch(err) {
+        if (err.message && err.message.includes('revoked_at')) {
+            const { data, error } = await supabase
+                .from('secure_share_links')
+                .update({ expires_at: new Date(0).toISOString() })
+                .eq('id', linkId)
+                .select()
+                .single();
+            if (error) throw error;
+            updateRes = data;
+        } else {
+            throw err;
+        }
+    }
+
+    return {
+        success: true,
+        id: linkId,
+        itinerary_id: link.itinerary_id,
+        revoked_at: now
+    };
+}
+
+async function getItineraryByShareToken(token) {
+    checkInit();
+
+    if (!token || typeof token !== 'string' || token.trim().length < 32) {
+        const err = new Error("Invalid share token.");
+        err.statusCode = 404;
+        throw err;
+    }
+
+    const tokenHash = hashToken(token);
+
+    const { data: link, error: linkErr } = await supabase
+        .from('secure_share_links')
+        .select('id, itinerary_id, expires_at, created_at')
+        .eq('token_hash', tokenHash)
+        .single();
+
+    if (linkErr || !link) {
+        const err = new Error("Invalid or expired share link.");
+        err.statusCode = 404;
+        throw err;
+    }
+
+    const isRevoked = !!link.revoked_at || (link.expires_at && new Date(link.expires_at).getTime() === 0);
+    if (isRevoked) {
+        const err = new Error("This share link has been revoked.");
+        err.statusCode = 410;
+        throw err;
+    }
+
+    if (link.expires_at && new Date(link.expires_at) <= new Date()) {
+        const err = new Error("This share link has expired.");
+        err.statusCode = 410;
+        throw err;
+    }
+
+    const { data: itinerary, error: itinErr } = await supabase
+        .from('itineraries')
+        .select('*')
+        .eq('id', link.itinerary_id)
+        .single();
+
+    if (itinErr || !itinerary) {
+        const err = new Error("Itinerary not found or no longer available.");
+        err.statusCode = 404;
+        throw err;
+    }
+
+    return filterCustomerItinerary(itinerary);
+}
+
 module.exports = {
     getItinerary,
     listItineraries,
     createItinerary,
     updateItinerary,
     changeStatus,
+    createShareLink,
+    listShareLinks,
+    revokeShareLink,
+    getItineraryByShareToken,
+    filterCustomerItinerary,
+    hashToken,
     setClient
 };
+

@@ -725,16 +725,28 @@
             showToast("✅ Sent to Ops Team!");
         }
 
-        let link = window.location.origin + window.location.pathname + "?id=" + quoteId;
-        if(itinerary.isVoucherMode) {
-            link = window.location.origin + window.location.pathname + "?voucher=" + quoteId;
+        try {
+            const shareRes = await fetchWithAuth(`/api/itineraries/${quoteId}/share`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ expiresInDays: 30 })
+            });
+            const shareData = await shareRes.json();
+            if (shareRes.ok && shareData.success && shareData.link) {
+                const customerUrl = shareData.link.url;
+                navigator.clipboard.writeText(customerUrl).then(() => {
+                    alert(`✅ Itinerary saved to cloud!\n\nSecure Customer Link copied to clipboard:\n${customerUrl}\n\n(Cryptographic token valid for 30 days)`);
+                }).catch(() => {
+                    prompt("Saved! Copy secure customer link below:", customerUrl);
+                });
+                return;
+            }
+        } catch(shareErr) {
+            console.warn("Could not automatically generate secure share link:", shareErr);
         }
-        
-        navigator.clipboard.writeText(link).then(() => {
-            alert("Success! Data saved to cloud.\n\nShareable Link copied to clipboard:\n" + link);
-        }).catch(err => {
-            alert("Success! Link: " + link);
-        });
+
+        showToast("Itinerary saved to cloud!");
+        alert("Success! Itinerary saved to cloud.");
     } catch (e) {
       console.error("Error saving to cloud: ", e);
       if(!isSilent) alert("Error saving to cloud: " + (e.message || JSON.stringify(e)));

@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Campfly Itinerary | Custom Travel Experience</title>
+  <link rel="icon" type="image/png" href="https://www.campfly.in/assets/logo-cropped.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    :root {
+      --primary: #0f766e;
+      --primary-dark: #115e59;
+      --primary-light: #14b8a6;
+      --accent: #f59e0b;
+      --bg-page: #f8fafc;
+      --card-bg: #ffffff;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --border-subtle: #e2e8f0;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+      --shadow-md: 0 4px 12px -1px rgba(0,0,0,0.08);
+      --shadow-lg: 0 10px 25px -3px rgba(0,0,0,0.1);
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-page);
+      color: var(--text-main);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      padding-bottom: 60px;
+    }
+
+    /* Top Brand Bar */
+    .brand-nav {
+      background: #ffffff;
+      border-bottom: 1px solid var(--border-subtle);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      padding: 12px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: var(--shadow-sm);
+    }
+    .brand-logo {
+      height: 38px;
+      object-fit: contain;
+    }
+    .nav-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .btn-pdf {
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: #ffffff;
+      border: none;
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+    .btn-pdf:hover {
+      opacity: 0.95;
+      transform: translateY(-1px);
+    }
+
+    /* Container */
+    .customer-container {
+      max-width: 860px;
+      margin: 24px auto;
+      padding: 0 16px;
+    }
+
+    /* Loading & Error States */
+    .state-box {
+      background: #ffffff;
+      border-radius: var(--radius);
+      padding: 60px 24px;
+      text-align: center;
+      box-shadow: var(--shadow-sm);
+      margin-top: 40px;
+    }
+    .state-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid var(--primary);
+      border-radius: 50%;
+      width: 44px;
+      height: 44px;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 20px;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    /* Hero Card */
+    .hero-card {
+      background: #ffffff;
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow-md);
+      margin-bottom: 24px;
+      position: relative;
+    }
+    .hero-img-container {
+      width: 100%;
+      height: 320px;
+      position: relative;
+      background: #0f172a;
+    }
+    .hero-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .hero-overlay {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(to top, rgba(15,23,42,0.95) 0%, rgba(15,23,42,0.6) 60%, transparent 100%);
+      padding: 30px 24px 20px;
+      color: #ffffff;
+    }
+    .hero-badge {
+      display: inline-block;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(8px);
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .hero-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 28px;
+      font-weight: 700;
+      line-height: 1.25;
+      margin-bottom: 6px;
+      color: #ffffff;
+    }
+    .hero-guest {
+      font-size: 15px;
+      color: #e2e8f0;
+      font-weight: 500;
+    }
+
+    /* Key Specs Grid */
+    .specs-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .spec-item {
+      background: #ffffff;
+      padding: 16px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--border-subtle);
+      text-align: center;
+    }
+    .spec-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .spec-val {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    /* Section Card */
+    .content-card {
+      background: #ffffff;
+      border-radius: var(--radius);
+      padding: 24px;
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--border-subtle);
+      margin-bottom: 24px;
+    }
+    .card-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .card-title i {
+      color: var(--primary);
+    }
+
+    /* Meal abbreviations pill strip */
+    .meal-legend {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+      background: #f1f5f9;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+    }
+    .meal-chip {
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 2px 8px;
+      font-weight: 500;
+    }
+    .meal-chip strong { color: var(--primary); }
+
+    /* Hotel List */
+    .hotel-item {
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 12px;
+      background: #fafafa;
+    }
+    .hotel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 6px;
+    }
+    .hotel-name {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+    .hotel-tag {
+      background: #e0f2fe;
+      color: #0369a1;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 6px;
+    }
+    .hotel-meta {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .hotel-meals {
+      display: flex;
+      gap: 6px;
+      font-size: 11px;
+    }
+    .badge-meal {
+      background: #dcfce7;
+      color: #15803d;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    /* Day Timeline */
+    .day-item {
+      position: relative;
+      padding-left: 32px;
+      margin-bottom: 24px;
+      border-left: 2px solid #cbd5e1;
+    }
+    .day-item:last-child {
+      border-left-color: transparent;
+      margin-bottom: 0;
+    }
+    .day-marker {
+      position: absolute;
+      left: -9px;
+      top: 0;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--primary);
+      border: 3px solid #ffffff;
+      box-shadow: 0 0 0 1px var(--primary);
+    }
+    .day-badge {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--primary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .day-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: var(--text-main);
+    }
+    .day-photo {
+      width: 100%;
+      max-height: 240px;
+      object-fit: cover;
+      border-radius: 8px;
+      margin-bottom: 10px;
+    }
+    .day-desc {
+      font-size: 14px;
+      color: #334155;
+      white-space: pre-line;
+      line-height: 1.6;
+    }
+
+    /* Pricing Section */
+    .price-box {
+      background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+      border: 1px solid #bbf7d0;
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .price-headline {
+      font-size: 13px;
+      color: #166534;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .price-amount {
+      font-size: 32px;
+      font-weight: 800;
+      color: #14532d;
+      margin: 4px 0 12px;
+    }
+    .price-splits {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      border-top: 1px dashed #86efac;
+      padding-top: 12px;
+    }
+    .split-col strong {
+      display: block;
+      font-size: 16px;
+      color: #166534;
+    }
+    .split-col span {
+      font-size: 12px;
+      color: #15803d;
+    }
+
+    /* Bank Card */
+    .bank-box {
+      background: #1e293b;
+      color: #ffffff;
+      border-radius: 12px;
+      padding: 24px;
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 20px;
+      align-items: center;
+    }
+    .bank-info h4 {
+      font-size: 14px;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 14px;
+    }
+    .bank-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      font-size: 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      padding-bottom: 6px;
+    }
+    .bank-row span.label {
+      color: #94a3b8;
+    }
+    .bank-row span.val {
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .copy-btn {
+      background: rgba(255,255,255,0.15);
+      border: none;
+      color: #ffffff;
+      padding: 3px 7px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+    }
+    .copy-btn:hover { background: rgba(255,255,255,0.25); }
+    .qr-wrap {
+      text-align: center;
+      background: #ffffff;
+      padding: 14px;
+      border-radius: 10px;
+      display: inline-block;
+      margin: 0 auto;
+    }
+    .qr-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 8px;
+    }
+    .upi-badges {
+      font-size: 11px;
+      color: #94a3b8;
+      margin-top: 8px;
+    }
+
+    /* Contact Card */
+    .contact-card {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      background: #f8fafc;
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 18px;
+    }
+    .agent-avatar {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: #cbd5e1;
+    }
+    .contact-details h4 {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+    .contact-details p {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .contact-links {
+      display: flex;
+      gap: 10px;
+    }
+    .contact-btn {
+      background: #ffffff;
+      border: 1px solid var(--border-subtle);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-main);
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Inclusions / Exclusions */
+    .list-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .list-card {
+      background: #f8fafc;
+      padding: 16px;
+      border-radius: 10px;
+      border: 1px solid var(--border-subtle);
+    }
+    .list-card h4 {
+      font-size: 14px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .inc-title { color: #16a34a; }
+    .exc-title { color: #dc2626; }
+    .item-list {
+      list-style: none;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    .item-list li {
+      position: relative;
+      padding-left: 18px;
+      margin-bottom: 4px;
+    }
+    .inc-list li::before {
+      content: "✓";
+      color: #16a34a;
+      position: absolute;
+      left: 0;
+      font-weight: bold;
+    }
+    .exc-list li::before {
+      content: "✕";
+      color: #dc2626;
+      position: absolute;
+      left: 0;
+      font-weight: bold;
+    }
+
+    /* Toast */
+    #toast {
+      visibility: hidden;
+      min-width: 200px;
+      background-color: #0f172a;
+      color: #fff;
+      text-align: center;
+      border-radius: 8px;
+      padding: 12px 18px;
+      position: fixed;
+      z-index: 1000;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 13px;
+      font-weight: 500;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    #toast.show { visibility: visible; animation: fadein 0.3s, fadeout 0.3s 2.7s; }
+    @keyframes fadein { from { bottom: 10px; opacity: 0; } to { bottom: 30px; opacity: 1; } }
+    @keyframes fadeout { from { bottom: 30px; opacity: 1; } to { bottom: 10px; opacity: 0; } }
+
+    /* Responsive */
+    @media (max-width: 720px) {
+      .specs-grid { grid-template-columns: repeat(2, 1fr); }
+      .bank-box { grid-template-columns: 1fr; text-align: center; }
+      .bank-row { justify-content: space-between; }
+      .list-grid { grid-template-columns: 1fr; }
+      .hero-img-container { height: 240px; }
+      .hero-title { font-size: 22px; }
+      .price-amount { font-size: 26px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Brand Navbar -->
+  <header class="brand-nav">
+    <img src="https://www.campfly.in/assets/logo-cropped.png" alt="Campfly" class="brand-logo" onerror="this.style.display='none'">
+    <div class="nav-actions">
+      <button class="btn-pdf" id="btn-download-pdf" onclick="generateCustomerPDF()" style="display:none;">
+        <i class="fa-solid fa-file-arrow-down"></i> Download PDF
+      </button>
+    </div>
+  </header>
+
+  <main class="customer-container">
+
+    <!-- Loading State -->
+    <div id="loading-state" class="state-box">
+      <div class="spinner"></div>
+      <h3 style="font-size:18px; font-weight:700; color:var(--text-main);">Loading your custom itinerary...</h3>
+      <p style="color:var(--text-muted); font-size:14px; margin-top:6px;">Retrieving verified travel details from Campfly</p>
+    </div>
+
+    <!-- Error State -->
+    <div id="error-state" class="state-box" style="display:none;">
+      <div class="state-icon" id="error-icon" style="color:#ef4444;"><i class="fa-solid fa-circle-exclamation"></i></div>
+      <h3 id="error-title" style="font-size:20px; font-weight:700; margin-bottom:8px;">Link Unavailable</h3>
+      <p id="error-desc" style="color:var(--text-muted); font-size:14px; max-width:480px; margin:0 auto 20px;">
+        This travel link is invalid, expired, or has been revoked.
+      </p>
+      <a href="https://www.campfly.in" class="btn-pdf" style="display:inline-flex;">Visit Campfly Website</a>
+    </div>
+
+    <!-- Main Itinerary Content (Customer View) -->
+    <div id="itinerary-content" style="display:none;">
+
+      <!-- Hero Card -->
+      <section class="hero-card">
+        <div class="hero-img-container">
+          <img id="c_hero_img" class="hero-img" src="" alt="Destination">
+          <div class="hero-overlay">
+            <span class="hero-badge" id="c_duration_badge">Exclusive Tour</span>
+            <h1 class="hero-title" id="c_title">Travel Itinerary</h1>
+            <p class="hero-guest">Prepared exclusively for <strong id="c_guest">Guest</strong></p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Key Specs Grid -->
+      <section class="specs-grid">
+        <div class="spec-item">
+          <div class="spec-label">Quotation ID</div>
+          <div class="spec-val" id="c_quote_id">-</div>
+        </div>
+        <div class="spec-item">
+          <div class="spec-label">Duration</div>
+          <div class="spec-val" id="c_duration">-</div>
+        </div>
+        <div class="spec-item">
+          <div class="spec-label">Travel Dates</div>
+          <div class="spec-val" id="c_dates">-</div>
+        </div>
+        <div class="spec-item">
+          <div class="spec-label">Guests</div>
+          <div class="spec-val" id="c_adults">-</div>
+        </div>
+      </section>
+
+      <!-- Accommodations -->
+      <section class="content-card" id="sec_hotels">
+        <h3 class="card-title"><i class="fa-solid fa-hotel"></i> Handpicked Accommodations</h3>
+        <div class="meal-legend">
+          <span>Meal Legend:</span>
+          <div class="meal-chip"><strong>B</strong> Breakfast</div>
+          <div class="meal-chip"><strong>L</strong> Lunch</div>
+          <div class="meal-chip"><strong>D</strong> Dinner</div>
+          <div class="meal-chip"><strong>BVR</strong> Beverages</div>
+          <div class="meal-chip"><strong>EP</strong> Room Only</div>
+        </div>
+        <div id="c_hotels_list"></div>
+      </section>
+
+      <!-- Day-by-Day Journey -->
+      <section class="content-card" id="sec_days">
+        <h3 class="card-title"><i class="fa-solid fa-map-location-dot"></i> Day-by-Day Itinerary</h3>
+        <div id="c_days_timeline"></div>
+      </section>
+
+      <!-- Package Pricing -->
+      <section class="content-card" id="sec_pricing">
+        <h3 class="card-title"><i class="fa-solid fa-receipt"></i> Package Investment</h3>
+        <div class="price-box">
+          <div class="price-headline" id="c_cost_type">Total Package Cost</div>
+          <div class="price-amount" id="c_total_cost">₹ 0</div>
+          <div class="price-splits">
+            <div class="split-col">
+              <span>Advance Payment Required</span>
+              <strong id="c_adv_amount">₹ 0</strong>
+              <span id="c_adv_date"></span>
+            </div>
+            <div class="split-col">
+              <span>Balance Payment Due</span>
+              <strong id="c_bal_amount">₹ 0</strong>
+              <span id="c_bal_date"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Secure Bank & UPI Details -->
+      <section class="content-card">
+        <h3 class="card-title"><i class="fa-solid fa-building-columns"></i> Payment Details</h3>
+        <div class="bank-box">
+          <div class="bank-info">
+            <h4>Campfly Official Bank Account</h4>
+            <div class="bank-row">
+              <span class="label">A/c Name:</span>
+              <span class="val" id="c_bk_name">CAMPFLY TOURS LLP</span>
+            </div>
+            <div class="bank-row">
+              <span class="label">A/c Number:</span>
+              <span class="val">
+                <span id="c_bk_acc">10292311723</span>
+                <button class="copy-btn" onclick="copyValue('c_bk_acc')"><i class="fa-regular fa-copy"></i> Copy</button>
+              </span>
+            </div>
+            <div class="bank-row">
+              <span class="label">IFSC Code:</span>
+              <span class="val">
+                <span id="c_bk_ifsc">IDFB0080511</span>
+                <button class="copy-btn" onclick="copyValue('c_bk_ifsc')"><i class="fa-regular fa-copy"></i> Copy</button>
+              </span>
+            </div>
+            <div class="bank-row">
+              <span class="label">UPI ID:</span>
+              <span class="val">
+                <span id="c_bk_upi">Campfly@idfcbank</span>
+                <button class="copy-btn" onclick="copyValue('c_bk_upi')"><i class="fa-regular fa-copy"></i> Copy</button>
+              </span>
+            </div>
+          </div>
+          <div style="text-align:center;">
+            <div class="qr-wrap">
+              <div class="qr-label">SCAN WITH ANY UPI APP</div>
+              <div id="c_upi_qr"></div>
+            </div>
+            <div class="upi-badges">Google Pay • PhonePe • Paytm • BHIM</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Inclusions & Exclusions -->
+      <section class="content-card">
+        <h3 class="card-title"><i class="fa-solid fa-list-check"></i> Inclusions & Exclusions</h3>
+        <div class="list-grid">
+          <div class="list-card">
+            <h4 class="inc-title"><i class="fa-solid fa-circle-check"></i> What's Included</h4>
+            <ul class="item-list inc-list" id="c_inc_list"></ul>
+          </div>
+          <div class="list-card">
+            <h4 class="exc-title"><i class="fa-solid fa-circle-xmark"></i> What's Excluded</h4>
+            <ul class="item-list exc-list" id="c_exc_list"></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- Terms & Policies -->
+      <section class="content-card">
+        <h3 class="card-title"><i class="fa-solid fa-shield-halved"></i> Terms & Policies</h3>
+        <div id="c_terms" style="font-size:13px; color:#475569; white-space:pre-line; line-height:1.7;"></div>
+      </section>
+
+      <!-- Travel Expert Contact Card -->
+      <section class="content-card">
+        <h3 class="card-title"><i class="fa-solid fa-user-tie"></i> Dedicated Travel Expert</h3>
+        <div class="contact-card">
+          <img id="c_rep_avatar" src="" alt="Consultant" class="agent-avatar" onerror="this.src='https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200'">
+          <div class="contact-details">
+            <h4 id="c_rep_name">Campfly Expert</h4>
+            <p id="c_rep_tagline">Custom Travel Designer</p>
+            <div class="contact-links">
+              <a href="#" id="c_rep_phone_link" class="contact-btn"><i class="fa-solid fa-phone"></i> Call Expert</a>
+              <a href="#" id="c_rep_email_link" class="contact-btn"><i class="fa-solid fa-envelope"></i> Email</a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <div id="toast">Copied to clipboard!</div>
+
+  <script>
+    let activeItinerary = null;
+
+    function showToast(msg) {
+      const t = document.getElementById("toast");
+      t.innerText = msg;
+      t.className = "show";
+      setTimeout(() => { t.className = ""; }, 3000);
+    }
+
+    function copyValue(elementId) {
+      const text = document.getElementById(elementId).innerText;
+      if (!text) return;
+      navigator.clipboard.writeText(text).then(() => {
+        showToast("Copied: " + text);
+      }).catch(err => console.error(err));
+    }
+
+    function formatDisplayDate(dateStr) {
+      if (!dateStr) return '';
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        const d = new Date(parts[0], parts[1] - 1, parts[2]);
+        return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+      }
+      return dateStr;
+    }
+
+    function formatCurrency(val, curr = '₹') {
+      const num = parseFloat(val) || 0;
+      return curr + ' ' + new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(num);
+    }
+
+    async function loadCustomerItinerary() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const token = urlParams.get('token');
+
+      if (!token) {
+        showError("Invalid Link", "No share token was provided in the link. Please verify your link or contact your travel consultant.");
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/public/itinerary/${encodeURIComponent(token)}`);
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          if (res.status === 410) {
+            showError("Link Expired or Revoked", data.error || "This travel itinerary link is no longer active. Please contact your Campfly agent for an updated link.");
+          } else {
+            showError("Itinerary Not Found", data.error || "We could not find the itinerary associated with this link.");
+          }
+          return;
+        }
+
+        renderItinerary(data.itinerary);
+      } catch (err) {
+        console.error("Fetch error:", err);
+        showError("Connection Error", "Unable to load the itinerary. Please check your internet connection and try again.");
+      }
+    }
+
+    function showError(title, desc) {
+      document.getElementById('loading-state').style.display = 'none';
+      document.getElementById('itinerary-content').style.display = 'none';
+      document.getElementById('btn-download-pdf').style.display = 'none';
+      
+      document.getElementById('error-title').innerText = title;
+      document.getElementById('error-desc').innerText = desc;
+      document.getElementById('error-state').style.display = 'block';
+    }
+
+    function renderItinerary(itin) {
+      activeItinerary = itin;
+      document.getElementById('loading-state').style.display = 'none';
+      document.getElementById('error-state').style.display = 'none';
+      document.getElementById('itinerary-content').style.display = 'block';
+      document.getElementById('btn-download-pdf').style.display = 'inline-flex';
+
+      // Title & Hero
+      document.title = (itin.title || 'Campfly Itinerary') + ' | ' + (itin.guest || 'Guest');
+      document.getElementById('c_title').innerText = itin.title || 'Your Custom Travel Experience';
+      document.getElementById('c_guest').innerText = itin.guest || 'Valued Guest';
+      if (itin.heroImg) {
+        document.getElementById('c_hero_img').src = itin.heroImg;
+      } else {
+        document.getElementById('c_hero_img').src = 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&q=80&w=1200';
+      }
+
+      // Specs
+      document.getElementById('c_quote_id').innerText = itin.quote_id || itin.id || '-';
+      document.getElementById('c_duration').innerText = itin.duration || (itin.days ? itin.days.length + ' Days' : '-');
+      document.getElementById('c_duration_badge').innerText = itin.duration || 'Custom Tour';
+      
+      const startFmt = formatDisplayDate(itin.start);
+      const endFmt = formatDisplayDate(itin.end);
+      document.getElementById('c_dates').innerText = (startFmt && endFmt) ? `${startFmt} - ${endFmt}` : (startFmt || '-');
+      document.getElementById('c_adults').innerText = (itin.adults || 2) + ' Adults';
+
+      // Hotels
+      const hotelsContainer = document.getElementById('c_hotels_list');
+      hotelsContainer.innerHTML = '';
+      if (itin.hotels && itin.hotels.length > 0) {
+        itin.hotels.forEach(h => {
+          const meals = [];
+          if (h.meals) {
+            if (h.meals.b) meals.push('<span class="badge-meal">B</span>');
+            if (h.meals.l) meals.push('<span class="badge-meal">L</span>');
+            if (h.meals.d) meals.push('<span class="badge-meal">D</span>');
+            if (h.meals.bvr) meals.push('<span class="badge-meal">BVR</span>');
+            if (h.meals.ep) meals.push('<span class="badge-meal">EP</span>');
+          }
+          const div = document.createElement('div');
+          div.className = 'hotel-item';
+          div.innerHTML = `
+            <div class="hotel-header">
+              <span class="hotel-name">${h.name || 'Selected Hotel'}</span>
+              ${h.star ? `<span class="hotel-tag">${h.star}</span>` : ''}
+            </div>
+            <div class="hotel-meta">
+              ${h.label || ''} • Room: ${h.room || 'Deluxe'} • Duration: ${h.nights || 'Stay'}
+            </div>
+            ${meals.length > 0 ? `<div class="hotel-meals"><span>Included Meals:</span> ${meals.join(' ')}</div>` : ''}
+          `;
+          hotelsContainer.appendChild(div);
+        });
+      } else {
+        document.getElementById('sec_hotels').style.display = 'none';
+      }
+
+      // Day-by-Day Timeline
+      const daysContainer = document.getElementById('c_days_timeline');
+      daysContainer.innerHTML = '';
+      if (itin.days && itin.days.length > 0) {
+        itin.days.forEach((d, idx) => {
+          const div = document.createElement('div');
+          div.className = 'day-item';
+          div.innerHTML = `
+            <div class="day-marker"></div>
+            <div class="day-badge">Day ${idx + 1}</div>
+            <h4 class="day-title">${d.title || ('Day ' + (idx + 1))}</h4>
+            ${d.img ? `<img src="${d.img}" alt="Day ${idx + 1}" class="day-photo" loading="lazy" onerror="this.style.display='none'">` : ''}
+            <div class="day-desc">${d.desc || ''}</div>
+          `;
+          daysContainer.appendChild(div);
+        });
+      } else {
+        document.getElementById('sec_days').style.display = 'none';
+      }
+
+      // Pricing
+      const curr = itin.currency === 'USD' ? '$' : (itin.currency === 'EUR' ? '€' : '₹');
+      document.getElementById('c_cost_type').innerText = itin.costType || 'Total Package Cost';
+      document.getElementById('c_total_cost').innerText = formatCurrency(itin.baseCost, curr);
+      document.getElementById('c_adv_amount').innerText = itin.advAmount ? formatCurrency(itin.advAmount, curr) : 'Pay Upon Confirmation';
+      document.getElementById('c_adv_date').innerText = itin.advDate ? 'Due by ' + formatDisplayDate(itin.advDate) : '';
+      
+      const advNum = parseFloat(itin.advAmount) || 0;
+      const baseNum = parseFloat(itin.baseCost) || 0;
+      const balNum = Math.max(0, baseNum - advNum);
+      document.getElementById('c_bal_amount').innerText = balNum > 0 ? formatCurrency(balNum, curr) : formatCurrency(baseNum, curr);
+      document.getElementById('c_bal_date').innerText = itin.balDate ? 'Due by ' + formatDisplayDate(itin.balDate) : '';
+
+      // Bank Details
+      const bk = itin.bankDetails || {
+        name: "CAMPFLY TOURS LLP",
+        account: "10292311723",
+        ifsc: "IDFB0080511",
+        upi: "Campfly@idfcbank"
+      };
+      document.getElementById('c_bk_name').innerText = bk.name;
+      document.getElementById('c_bk_acc').innerText = bk.account;
+      document.getElementById('c_bk_ifsc').innerText = bk.ifsc;
+      document.getElementById('c_bk_upi').innerText = bk.upi;
+
+      // UPI QR Code
+      const qrEl = document.getElementById('c_upi_qr');
+      qrEl.innerHTML = '';
+      let upiPayUrl = `upi://pay?pa=${encodeURIComponent(bk.upi)}&pn=${encodeURIComponent(bk.name)}&tn=${encodeURIComponent("Quote " + (itin.quote_id || itin.id))}`;
+      if (itin.advAmount && !isNaN(parseFloat(itin.advAmount))) {
+        upiPayUrl += `&am=${encodeURIComponent(parseFloat(itin.advAmount))}`;
+      }
+      new QRCode(qrEl, {
+        text: upiPayUrl,
+        width: 130,
+        height: 130,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.M
+      });
+
+      // Inclusions / Exclusions
+      const incContainer = document.getElementById('c_inc_list');
+      incContainer.innerHTML = '';
+      if (itin.inc) {
+        itin.inc.split('\n').filter(l => l.trim()).forEach(l => {
+          const li = document.createElement('li');
+          li.innerText = l.trim();
+          incContainer.appendChild(li);
+        });
+      }
+
+      const excContainer = document.getElementById('c_exc_list');
+      excContainer.innerHTML = '';
+      if (itin.exc) {
+        itin.exc.split('\n').filter(l => l.trim()).forEach(l => {
+          const li = document.createElement('li');
+          li.innerText = l.trim();
+          excContainer.appendChild(li);
+        });
+      }
+
+      // Terms
+      document.getElementById('c_terms').innerText = itin.terms || 'Standard Campfly booking and cancellation policies apply. Confirmation is subject to seat and hotel availability at the time of payment.';
+
+      // Agent Contact
+      document.getElementById('c_rep_name').innerText = itin.repName || 'Campfly Travel Expert';
+      document.getElementById('c_rep_tagline').innerText = itin.repTagline || 'Destination Specialist';
+      if (itin.repAvatar) document.getElementById('c_rep_avatar').src = itin.repAvatar;
+      if (itin.repPhone) {
+        document.getElementById('c_rep_phone_link').href = 'tel:' + itin.repPhone;
+      } else {
+        document.getElementById('c_rep_phone_link').style.display = 'none';
+      }
+      if (itin.repEmail) {
+        document.getElementById('c_rep_email_link').href = 'mailto:' + itin.repEmail;
+      } else {
+        document.getElementById('c_rep_email_link').style.display = 'none';
+      }
+    }
+
+    function generateCustomerPDF() {
+      const element = document.getElementById('itinerary-content');
+      const quoteId = (activeItinerary && activeItinerary.quote_id) ? activeItinerary.quote_id : 'Campfly_Trip';
+      
+      const opt = {
+        margin: [10, 10, 10, 10],
+        filename: `Campfly_Itinerary_${quoteId}.pdf`,
+        image: { type: 'jpeg', quality: 0.95 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      html2pdf().set(opt).from(element).save();
+    }
+
+    document.addEventListener('DOMContentLoaded', loadCustomerItinerary);
+  </script>
+</body>
+</html>
