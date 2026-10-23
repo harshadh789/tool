@@ -7,3 +7,4 @@ node_modules/
 *.pem
 *.key
 .env*
+tests/pdf_output/

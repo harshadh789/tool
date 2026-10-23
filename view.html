@@ -170,17 +170,21 @@
     /* Key Specs Grid */
     .specs-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 12px;
       margin-bottom: 24px;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
     }
     .spec-item {
       background: #ffffff;
-      padding: 16px;
+      padding: 14px 12px;
       border-radius: var(--radius);
       box-shadow: var(--shadow-sm);
       border: 1px solid var(--border-subtle);
       text-align: center;
+      min-width: 0;
+      overflow: hidden;
     }
     .spec-label {
       font-size: 11px;
@@ -189,11 +193,15 @@
       letter-spacing: 0.5px;
       font-weight: 600;
       margin-bottom: 4px;
+      white-space: nowrap;
     }
     .spec-val {
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 700;
       color: var(--text-main);
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      line-height: 1.35;
     }
 
     /* Section Card */
@@ -204,6 +212,8 @@
       box-shadow: var(--shadow-sm);
       border: 1px solid var(--border-subtle);
       margin-bottom: 24px;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
     }
     .card-title {
       font-size: 18px;
@@ -213,6 +223,8 @@
       display: flex;
       align-items: center;
       gap: 10px;
+      page-break-after: avoid !important;
+      break-after: avoid !important;
     }
     .card-title i {
       color: var(--primary);
@@ -245,6 +257,8 @@
       padding: 16px;
       margin-bottom: 12px;
       background: #fafafa;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
     }
     .hotel-header {
       display: flex;
@@ -289,6 +303,8 @@
       padding-left: 32px;
       margin-bottom: 24px;
       border-left: 2px solid #cbd5e1;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
     }
     .day-item:last-child {
       border-left-color: transparent;
@@ -318,6 +334,7 @@
       font-weight: 700;
       margin-bottom: 8px;
       color: var(--text-main);
+      word-break: break-word;
     }
     .day-photo {
       width: 100%;
@@ -331,6 +348,7 @@
       color: #334155;
       white-space: pre-line;
       line-height: 1.6;
+      word-break: break-word;
     }
 
     /* Pricing Section */
@@ -340,6 +358,8 @@
       border-radius: 10px;
       padding: 20px;
       margin-bottom: 16px;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
     }
     .price-headline {
       font-size: 13px;
@@ -380,6 +400,8 @@
       grid-template-columns: 1.4fr 1fr;
       gap: 20px;
       align-items: center;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
     }
     .bank-info h4 {
       font-size: 14px;
@@ -423,6 +445,8 @@
       border-radius: 10px;
       display: inline-block;
       margin: 0 auto;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
     }
     .qr-label {
       font-size: 11px;
@@ -445,6 +469,8 @@
       border: 1px solid var(--border-subtle);
       border-radius: 12px;
       padding: 18px;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
     }
     .agent-avatar {
       width: 64px;
@@ -983,19 +1009,94 @@
       }
     }
 
-    function generateCustomerPDF() {
+    async function generateCustomerPDF() {
       const element = document.getElementById('itinerary-content');
-      const quoteId = (activeItinerary && activeItinerary.quote_id) ? activeItinerary.quote_id : 'Campfly_Trip';
+      if (!element) return;
+      const quoteId = (activeItinerary && (activeItinerary.quote_id || activeItinerary.id)) ? (activeItinerary.quote_id || activeItinerary.id) : 'Campfly_Trip';
       
-      const opt = {
-        margin: [10, 10, 10, 10],
-        filename: `Campfly_Itinerary_${quoteId}.pdf`,
-        image: { type: 'jpeg', quality: 0.95 },
-        html2canvas: { scale: 2, useCORS: true },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      };
+      const downloadBtn = document.getElementById('btn-download-pdf');
+      const originalBtnText = downloadBtn ? downloadBtn.innerHTML : '';
+      if (downloadBtn) {
+        downloadBtn.disabled = true;
+        downloadBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generating PDF...';
+      }
 
-      html2pdf().set(opt).from(element).save();
+      try {
+        // 1. Ensure QR code canvas is rendered and cloned as a visible image
+        const qrEl = document.getElementById('c_upi_qr');
+        if (qrEl) {
+          const cvs = qrEl.querySelector('canvas');
+          let img = qrEl.querySelector('img');
+          if (cvs) {
+            try {
+              const dataUrl = cvs.toDataURL('image/png');
+              if (!img) {
+                img = document.createElement('img');
+                qrEl.appendChild(img);
+              }
+              img.src = dataUrl;
+              img.style.display = 'block';
+              img.style.width = '130px';
+              img.style.height = '130px';
+              img.style.margin = '0 auto';
+              img.setAttribute('alt', 'UPI Payment QR Code');
+            } catch(e) {
+              console.warn('QR canvas toDataURL error in customer view:', e);
+            }
+          }
+        }
+
+        // 2. Wait for all images inside container to decode/load
+        const images = Array.from(element.querySelectorAll('img'));
+        await Promise.all(images.map(img => {
+          if (img.complete && img.naturalHeight !== 0) return Promise.resolve();
+          return new Promise(resolve => {
+            img.onload = resolve;
+            img.onerror = resolve;
+            setTimeout(resolve, 1500);
+          });
+        }));
+
+        // 3. Short reflow tick for layout stabilization
+        await new Promise(r => setTimeout(r, 100));
+
+        const opt = {
+          margin: [8, 8, 8, 8],
+          filename: `Campfly_Itinerary_${quoteId}.pdf`,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { 
+            scale: 2, 
+            useCORS: true, 
+            allowTaint: true,
+            logging: false,
+            letterRendering: true
+          },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          pagebreak: { 
+            mode: ['avoid-all', 'css', 'legacy'],
+            avoid: [
+              '.hero-card',
+              '.specs-grid',
+              '.content-card',
+              '.hotel-item',
+              '.day-item',
+              '.price-box',
+              '.bank-box',
+              '.list-card'
+            ]
+          }
+        };
+
+        await html2pdf().set(opt).from(element).save();
+      } catch(e) {
+        console.error("PDF generation failed:", e);
+        alert("Failed to export PDF. Please try again.");
+      } finally {
+        if (downloadBtn) {
+          downloadBtn.disabled = false;
+          downloadBtn.innerHTML = originalBtnText || '<i class="fa-solid fa-file-arrow-down"></i> Download PDF';
+        }
+      }
     }
 
     document.addEventListener('DOMContentLoaded', loadCustomerItinerary);

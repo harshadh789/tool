@@ -568,36 +568,91 @@
     }
   }
 
-  function generatePDF() {
+  async function preparePdfAssets(container) {
+    if (!container) return;
+    // 1. Ensure QR codes are rendered as visible img elements with valid dataURL
+    const qrContainers = container.querySelectorAll('#o_bk_qr, #o_qr');
+    qrContainers.forEach(qc => {
+      const cvs = qc.querySelector('canvas');
+      let img = qc.querySelector('img');
+      if (cvs) {
+        try {
+          const dataUrl = cvs.toDataURL('image/png');
+          if (!img) {
+            img = document.createElement('img');
+            qc.appendChild(img);
+          }
+          img.src = dataUrl;
+          img.style.display = 'block';
+          img.style.width = (cvs.width || 120) + 'px';
+          img.style.height = (cvs.height || 120) + 'px';
+          img.style.margin = '0 auto';
+          img.setAttribute('alt', 'Payment QR Code');
+        } catch(e) {
+          console.warn('QR canvas toDataURL error:', e);
+        }
+      }
+    });
+
+    // 2. Wait for all images inside container to finish loading
+    const images = Array.from(container.querySelectorAll('img'));
+    await Promise.all(images.map(img => {
+      if (img.complete && img.naturalHeight !== 0) return Promise.resolve();
+      return new Promise(resolve => {
+        img.onload = resolve;
+        img.onerror = resolve;
+        setTimeout(resolve, 1500); // 1.5s max timeout per asset
+      });
+    }));
+
+    // 3. Short reflow tick to ensure DOM paint
+    await new Promise(r => setTimeout(r, 100));
+  }
+
+  async function generatePDF() {
     const element = document.getElementById('pdf-container');
+    if (!element) return;
     const quoteId = (getVal('i_quote') || 'Draft').trim();
-    
-    const pxToMm = 210 / element.offsetWidth;
-    const exactHeight = Math.ceil((element.offsetHeight * pxToMm) + 2); 
     const finalFilename = `Campfly_Itinerary_${quoteId}.pdf`;
     
-    html2pdf().set({
-      margin: 0,
-      image: { type: 'jpeg', quality: 0.8 }, 
-      html2canvas: { scale: 1.5, useCORS: true, logging: false }, 
-      jsPDF: { unit: 'mm', format: [210, exactHeight], orientation: 'portrait' }
-    }).from(element).outputPdf('blob').then(function(pdfBlob) {
-        const blobUrl = URL.createObjectURL(pdfBlob);
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = finalFilename;
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-        
-        setTimeout(() => {
-            document.body.removeChild(a);
-            URL.revokeObjectURL(blobUrl);
-        }, 500);
-    }).catch(function(err) {
-        console.error("PDF generation error:", err);
-        alert("Failed to generate PDF. Please try again.");
-    });
+    try {
+      await preparePdfAssets(element);
+
+      const opt = {
+        margin: [8, 8, 8, 8],
+        filename: finalFilename,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { 
+          scale: 2, 
+          useCORS: true, 
+          allowTaint: true, 
+          logging: false,
+          letterRendering: true
+        },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { 
+          mode: ['avoid-all', 'css', 'legacy'],
+          avoid: [
+            '.itinerary-day',
+            '.hotel-card',
+            '.quote-box',
+            '.pricing-box',
+            '.finance-card',
+            '.inc-exc-grid',
+            '.terms-box',
+            '.cancel-table',
+            '.bank-card',
+            '.bank-qr-section',
+            '.abbrev-strip'
+          ]
+        }
+      };
+
+      await html2pdf().set(opt).from(element).save();
+    } catch (err) {
+      console.error("PDF generation error:", err);
+      alert("Failed to generate PDF. Please try again.");
+    }
   }
 
   function getItineraryData(quoteId) {

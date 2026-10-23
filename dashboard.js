@@ -122,10 +122,12 @@ function renderTable(searchTerm = "") {
         if (isVoucher) {
             actions += '<button class="action-btn" title="Edit" onclick="window.open(\'/?edit=' + docId + '\', \'_blank\')"><i class="fa-solid fa-pen"></i></button>';
             actions += '<button class="action-btn" title="View Voucher" onclick="window.open(\'/?voucher=' + docId + '\', \'_blank\')"><i class="fa-solid fa-eye"></i></button>';
+            actions += '<button class="action-btn" title="Copy Client Link" onclick="copyToClipboard(\'/?voucher=' + docId + '\')"><i class="fa-solid fa-link"></i></button>';
             actions += '<button class="action-btn" title="Create Secure Customer Link" style="color:var(--primary-color);" onclick="shareCustomerLink(\'' + docId + '\')"><i class="fa-solid fa-share-nodes"></i></button>';
         } else {
             actions += '<button class="action-btn" title="Edit" onclick="window.open(\'/?edit=' + docId + '\', \'_blank\')"><i class="fa-solid fa-pen"></i></button>';
             actions += '<button class="action-btn" title="View Itinerary" onclick="window.open(\'/?id=' + docId + '\', \'_blank\')"><i class="fa-solid fa-eye"></i></button>';
+            actions += '<button class="action-btn" title="Copy Client Link" onclick="copyToClipboard(\'/?id=' + docId + '\')"><i class="fa-solid fa-link"></i></button>';
             actions += '<button class="action-btn" title="Create Secure Customer Link" style="color:var(--primary-color);" onclick="shareCustomerLink(\'' + docId + '\')"><i class="fa-solid fa-share-nodes"></i></button>';
         }
         if (currentUserRole === 'ADMIN' || currentUserRole === 'OPS') {

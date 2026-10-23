@@ -7,6 +7,8 @@ const path = require('path');
 const FormData = require('form-data');
 const { createClient } = require('@supabase/supabase-js');
 const db = require('./db.js');
+const payments = require('./payments.js');
+const mdrAccounting = require('./mdr_accounting.js');
 
 const EXPECTED_STAGING_HOST = 'iqqkuqgsvuciunmvtmdr.supabase.co';
 
@@ -789,6 +791,177 @@ app.get('/api/getItinerary/:id', requireAuth, async (req, res) => {
     } catch (error) {
         console.error("Error loading itinerary:", error.response ? error.response.data : error.message);
         res.status(500).json({ success: false, error: 'Error loading itinerary from Zoho.' });
+    }
+});
+
+// ==========================================
+// Phase 3B.1 - Payments & Bank Reconciliation APIs
+// ==========================================
+
+function handlePaymentError(err, res, defaultStatus = 400) {
+    const status = err.status || (
+        err.message && (
+            err.message.includes('Payment storage unavailable') ||
+            err.message.includes('Required database migration') ||
+            err.message.includes('temporarily unavailable')
+        ) ? 503 : (
+            err.message && err.message.includes('not found') ? 404 : defaultStatus
+        )
+    );
+    res.status(status).json({
+        success: false,
+        error: err.message,
+        code: err.code || (status === 503 ? 'STORAGE_UNAVAILABLE' : undefined)
+    });
+}
+
+app.post('/api/payments', requireAuth, async (req, res) => {
+    try {
+        const { quotation_id, transaction_type } = req.body;
+        
+        // SALES role permissions: can only record customer_receipt for own itineraries
+        if (req.userRole === 'SALES') {
+            if (transaction_type && transaction_type !== 'customer_receipt') {
+                return res.status(403).json({ success: false, error: 'Sales can only record customer receipts. Contact Admin/Ops for supplier payments or refunds.' });
+            }
+            if (quotation_id) {
+                const itin = await db.getItinerary(quotation_id, req.user, req.userRole);
+                if (!itin) {
+                    return res.status(404).json({ success: false, error: 'Itinerary not found or access denied.' });
+                }
+                if (itin.owner_id !== req.user.id) {
+                    return res.status(403).json({ success: false, error: 'Sales can only record payments for their own itineraries.' });
+                }
+            }
+        } else if (req.userRole !== 'ADMIN' && req.userRole !== 'OPS') {
+            return res.status(403).json({ success: false, error: 'Unauthorized role.' });
+        }
+
+        const newPayment = await payments.recordPayment(req.body, req.user, supabaseAdmin);
+        res.status(201).json({ success: true, payment: newPayment });
+    } catch(err) {
+        console.error("Record payment error:", err.message);
+        handlePaymentError(err, res, 400);
+    }
+});
+
+app.get('/api/payments', requireAuth, async (req, res) => {
+    try {
+        const filters = {
+            quotation_id: req.query.quotation_id,
+            direction: req.query.direction,
+            status: req.query.status,
+            payment_method: req.query.payment_method,
+            date_from: req.query.date_from,
+            date_to: req.query.date_to,
+            search: req.query.search
+        };
+
+        if (req.userRole === 'SALES') {
+            if (filters.quotation_id) {
+                const itin = await db.getItinerary(filters.quotation_id, req.user, req.userRole);
+                if (!itin || itin.owner_id !== req.user.id) {
+                    return res.status(403).json({ success: false, error: 'Sales can only view payments for their own itineraries.' });
+                }
+            }
+        }
+
+        let results = await payments.listPayments(filters, supabaseAdmin);
+        
+        // If SALES and no quote specified, restrict results to their own itineraries
+        if (req.userRole === 'SALES' && !filters.quotation_id) {
+            const myItineraries = await db.listItineraries(req.user, req.userRole);
+            const myQuoteIds = new Set(myItineraries.map(i => i.id || i.quote_id));
+            results = results.filter(p => p.quotation_id && myQuoteIds.has(p.quotation_id));
+        }
+
+        res.json({ success: true, count: results.length, data: results });
+    } catch(err) {
+        console.error("List payments error:", err.message);
+        handlePaymentError(err, res, 500);
+    }
+});
+
+app.post('/api/payments/:id/reconcile', requireAuth, async (req, res) => {
+    try {
+        if (req.userRole !== 'ADMIN' && req.userRole !== 'OPS') {
+            return res.status(403).json({ success: false, error: 'Only Administrator and Operations staff can reconcile payments.' });
+        }
+
+        const { statementReference, statementAmount, statementDate, actualFee, reconciliationNotes } = req.body;
+        const result = await payments.reconcilePayment({
+            paymentId: req.params.id,
+            statementReference,
+            statementAmount,
+            statementDate,
+            actualFee,
+            reconciliationNotes,
+            user: req.user,
+            supabaseAdmin
+        });
+
+        res.json({
+            success: true,
+            payment: result.payment,
+            audit: result.audit,
+            isMatch: result.isMatch,
+            discrepancy: result.discrepancy
+        });
+    } catch(err) {
+        console.error("Reconcile payment error:", err.message);
+        handlePaymentError(err, res, 400);
+    }
+});
+
+app.get('/api/payments/duplicates', requireAuth, async (req, res) => {
+    try {
+        if (req.userRole !== 'ADMIN' && req.userRole !== 'OPS') {
+            return res.status(403).json({ success: false, error: 'Only Administrator and Operations staff can review duplicate payment flags.' });
+        }
+
+        const flags = await payments.findDuplicatePayments(supabaseAdmin);
+        res.json({ success: true, count: flags.length, duplicates: flags });
+    } catch(err) {
+        console.error("Check duplicates error:", err.message);
+        handlePaymentError(err, res, 500);
+    }
+});
+
+app.get('/api/payments/summary/:quoteId', requireAuth, async (req, res) => {
+    try {
+        const { quoteId } = req.params;
+        const itin = await db.getItinerary(quoteId, req.user, req.userRole);
+        if (!itin) {
+            return res.status(404).json({ success: false, error: 'Itinerary not found or access denied.' });
+        }
+
+        if (req.userRole === 'SALES' && itin.owner_id !== req.user.id) {
+            return res.status(403).json({ success: false, error: 'Sales can only view financial summaries for their own itineraries.' });
+        }
+
+        const quotePayments = await payments.listPayments({ quotation_id: quoteId }, supabaseAdmin);
+        const financials = mdrAccounting.calculateItineraryFinancials(itin, quotePayments);
+
+        res.json({ success: true, quotation_id: quoteId, financials, payments_count: quotePayments.length });
+    } catch(err) {
+        console.error("Payment summary error:", err.message);
+        handlePaymentError(err, res, 500);
+    }
+});
+
+app.post('/api/payments/fee-estimate', requireAuth, (req, res) => {
+    try {
+        const { amount, paymentMethod, provider, category, transactionDate } = req.body;
+        const estimate = mdrAccounting.estimateProcessingFee({
+            amount,
+            paymentMethod,
+            provider,
+            category,
+            transactionDate
+        });
+        res.json({ success: true, estimate });
+    } catch(err) {
+        res.status(400).json({ success: false, error: err.message });
     }
 });
 
