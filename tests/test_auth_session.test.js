@@ -365,7 +365,7 @@ function createAuthSandbox() {
     });
 
     // --------------------------------------------------------------------------
-    // Test 6: Logout falls back to local session clearing if global sign-out fails
+    // Additional logout recovery test: local session clearing after global sign-out fails
     // --------------------------------------------------------------------------
     await runAsyncTest("handleLogout clears persisted session after global sign-out error", async () => {
         const sb = createAuthSandbox();
