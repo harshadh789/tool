@@ -1,50 +1,181 @@
+// ==============================================================================
+// Campfly Authentication Module
+// ==============================================================================
+// Singleton Supabase browser client with persistent session handling,
+// automatic token refresh, onAuthStateChange synchronization, and safe retry.
+// Separates client initialization latch from per-call session inspection.
+// ==============================================================================
+
 let supabaseClient = null;
 let currentSession = null;
+let clientInitPromise = null;
+let authStateSubscription = null;
+let lastLoginHandledAt = 0;
 
+/**
+ * Safely updates the authentication overlay UI.
+ * Never exposes tokens or secrets.
+ */
+function updateAuthUI(isAuthenticated) {
+    if (typeof document === 'undefined') return;
+    const overlay = document.getElementById('auth-overlay');
+    if (!overlay) return;
+
+    if (isAuthenticated) {
+        overlay.style.opacity = '0';
+        overlay.style.pointerEvents = 'none';
+        setTimeout(() => {
+            overlay.style.display = 'none';
+        }, 200);
+    } else {
+        overlay.style.display = 'flex';
+        overlay.style.pointerEvents = 'auto';
+        setTimeout(() => {
+            overlay.style.opacity = '1';
+        }, 10);
+    }
+}
+
+/**
+ * Ensures a single shared Supabase client instance exists.
+ * Prevents concurrent client creation races while never caching session state.
+ */
+async function getOrInitSupabaseClient() {
+    if (supabaseClient) {
+        return supabaseClient;
+    }
+
+    if (clientInitPromise) {
+        return clientInitPromise;
+    }
+
+    clientInitPromise = (async () => {
+        try {
+            const res = await fetch('/api/auth/config');
+            const config = await res.json();
+            
+            if (!config.success || !config.url || !config.key) {
+                console.error("[Auth] Supabase configuration missing or invalid from backend.");
+                return null;
+            }
+
+            if (typeof supabase === 'undefined' || !supabase.createClient) {
+                console.error("[Auth] Supabase client library not loaded.");
+                return null;
+            }
+
+            // Explicitly configure supported browser authentication options
+            supabaseClient = supabase.createClient(config.url, config.key, {
+                auth: {
+                    persistSession: true,
+                    autoRefreshToken: true,
+                    detectSessionInUrl: true,
+                    storage: typeof window !== 'undefined' ? window.localStorage : undefined
+                }
+            });
+
+            // Subscribe to auth state changes to keep currentSession synchronized
+            if (!authStateSubscription && supabaseClient.auth?.onAuthStateChange) {
+                const { data } = supabaseClient.auth.onAuthStateChange((event, session) => {
+                    console.log('[Auth] Auth state change event:', event, '| session active:', !!session);
+                    currentSession = session || null;
+                    if (session) {
+                        updateAuthUI(true);
+                        const now = Date.now();
+                        if (event === 'SIGNED_IN' && now - lastLoginHandledAt > 1000) {
+                            lastLoginHandledAt = now;
+                            if (typeof onLoginSuccess === 'function') {
+                                onLoginSuccess();
+                            }
+                        }
+                    } else if (event === 'SIGNED_OUT') {
+                        updateAuthUI(false);
+                        if (typeof onLogoutSuccess === 'function') {
+                            onLogoutSuccess();
+                        }
+                    }
+                });
+                if (data && data.subscription) {
+                    authStateSubscription = data.subscription;
+                }
+            }
+
+            return supabaseClient;
+        } catch (e) {
+            console.error("[Auth] Failed to initialize Supabase client:", e.message || e);
+            return null;
+        } finally {
+            clientInitPromise = null;
+        }
+    })();
+
+    return clientInitPromise;
+}
+
+/**
+ * Initializes authentication and always retrieves the freshest session state.
+ * Never permanently caches an initial unauthenticated result.
+ * Safe to call repeatedly before or after login.
+ */
 async function initAuth() {
+    const client = await getOrInitSupabaseClient();
+    if (!client) {
+        currentSession = null;
+        updateAuthUI(false);
+        return false;
+    }
+
     try {
-        const res = await fetch('/api/auth/config');
-        const config = await res.json();
-        
-        if (!config.success || !config.url || !config.key) {
-            console.error("Supabase not configured on server.");
+        // Always query client.auth.getSession() for the latest live state
+        const { data: { session }, error } = await client.auth.getSession();
+        if (error) {
+            console.error("[Auth] Error restoring session:", error.message);
+            currentSession = null;
+            updateAuthUI(false);
             return false;
         }
-
-        supabaseClient = supabase.createClient(config.url, config.key);
-        
-        const { data: { session }, error } = await supabaseClient.auth.getSession();
-        if (error) throw error;
         
         if (session) {
             currentSession = session;
+            updateAuthUI(true);
             
             // Handle invitation and password setup
-            if (window.location.hash.includes('type=invite') || window.location.hash.includes('type=recovery')) {
-                setTimeout(async () => {
-                    const newPassword = prompt("Please set your new password (minimum 6 characters):");
-                    if (newPassword && newPassword.length >= 6) {
-                        const { error: updateError } = await supabaseClient.auth.updateUser({ password: newPassword });
-                        if (updateError) alert("Error setting password: " + updateError.message);
-                        else alert("Password set successfully! You can now log in normally.");
-                    } else {
-                        alert("Password setup cancelled or invalid. You must set a password to retain access.");
-                    }
-                    window.location.hash = ''; // Clear hash securely
-                }, 500); // slight delay to ensure UI is ready
+            if (typeof window !== 'undefined' && window.location.hash) {
+                if (window.location.hash.includes('type=invite') || window.location.hash.includes('type=recovery')) {
+                    setTimeout(async () => {
+                        const newPassword = prompt("Please set your new password (minimum 6 characters):");
+                        if (newPassword && newPassword.length >= 6) {
+                            const { error: updateError } = await client.auth.updateUser({ password: newPassword });
+                            if (updateError) alert("Error setting password: " + updateError.message);
+                            else alert("Password set successfully! You can now log in normally.");
+                        } else {
+                            alert("Password setup cancelled or invalid. You must set a password to retain access.");
+                        }
+                        window.location.hash = ''; // Clear hash securely
+                    }, 500);
+                }
             }
             
             return true;
         }
+
+        currentSession = null;
+        updateAuthUI(false);
         return false;
     } catch (e) {
-        console.error("Error initializing auth:", e);
+        console.error("[Auth] Error checking authentication session:", e.message || "Unknown error");
+        currentSession = null;
+        updateAuthUI(false);
         return false;
     }
 }
 
+/**
+ * Handles user login from the auth overlay form.
+ */
 async function handleLogin() {
-    if (!supabaseClient) {
+    const client = await getOrInitSupabaseClient();
+    if (!client) {
         alert("Authentication is not configured on the server. Please check backend setup.");
         return;
     }
@@ -58,55 +189,114 @@ async function handleLogin() {
     const errorEl = document.getElementById('login_error');
     
     if (!email || !password) {
-        errorEl.innerText = "Please enter both Email and Password.";
-        errorEl.style.display = "block";
+        if (errorEl) {
+            errorEl.innerText = "Please enter both Email and Password.";
+            errorEl.style.display = "block";
+        }
         return;
     }
     
     const btn = document.querySelector('.auth-btn');
-    if(btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Authenticating...';
+    if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Authenticating...';
     
-    const { data, error } = await supabaseClient.auth.signInWithPassword({
+    const { data, error } = await client.auth.signInWithPassword({
         email: email,
         password: password,
     });
     
-    if(btn) btn.innerHTML = 'Authenticate & Unlock <i class="fa-solid fa-arrow-right"></i>';
+    if (btn) btn.innerHTML = 'Authenticate & Unlock <i class="fa-solid fa-arrow-right"></i>';
     
     if (error) {
-        errorEl.innerText = error.message;
-        errorEl.style.display = "block";
+        if (errorEl) {
+            errorEl.innerText = error.message;
+            errorEl.style.display = "block";
+        }
     } else {
         currentSession = data.session;
-        document.getElementById('auth-overlay').style.opacity = '0';
-        setTimeout(() => {
-            document.getElementById('auth-overlay').style.display = 'none';
-        }, 300);
-        if(typeof showToast === 'function') showToast("Access Granted. Welcome!");
+        if (errorEl) errorEl.style.display = "none";
+        updateAuthUI(true);
+        if (typeof showToast === 'function') showToast("Access Granted. Welcome!");
         
+        lastLoginHandledAt = Date.now();
         // Let the main script know we logged in
         if (typeof onLoginSuccess === 'function') onLoginSuccess();
     }
 }
 
+/**
+ * Signs out the current user, clears the local session, and prompts login.
+ */
 async function handleLogout() {
-    if (!supabaseClient) return;
-    await supabaseClient.auth.signOut();
-    window.location.reload(); 
+    const client = await getOrInitSupabaseClient();
+    if (client) {
+        try {
+            await client.auth.signOut();
+        } catch (e) {
+            console.warn("[Auth] Sign out error:", e.message);
+        }
+    }
+    currentSession = null;
+    updateAuthUI(false);
+    if (typeof window !== 'undefined') {
+        if (!window.location.pathname.endsWith('index.html') && window.location.pathname !== '/') {
+            window.location.href = 'index.html';
+        } else {
+            window.location.reload();
+        }
+    }
 }
 
+/**
+ * Authenticated fetch helper.
+ * Automatically obtains the latest valid session, attaches the bearer token,
+ * and refreshes token if the backend returns a 401 challenge.
+ */
 async function fetchWithAuth(url, options = {}) {
-    if (!currentSession && supabaseClient) {
-        const { data } = await supabaseClient.auth.getSession();
-        currentSession = data.session;
+    const client = await getOrInitSupabaseClient();
+    
+    // Always request the freshest session (getSession automatically refreshes expired sessions)
+    if (client) {
+        try {
+            const { data, error } = await client.auth.getSession();
+            if (!error && data?.session) {
+                currentSession = data.session;
+            }
+        } catch (e) {
+            console.warn("[Auth] getSession warning in fetchWithAuth:", e.message);
+        }
     }
     
-    if (!currentSession) {
+    if (!currentSession || !currentSession.access_token) {
+        updateAuthUI(false);
         throw new Error("No active session. Please log in.");
     }
     
-    const headers = options.headers || {};
+    const headers = { ...(options.headers || {}) };
     headers['Authorization'] = `Bearer ${currentSession.access_token}`;
     
-    return fetch(url, { ...options, headers });
+    let response = await fetch(url, { ...options, headers });
+
+    // Handle token expiration / 401 gracefully with single token refresh attempt
+    if (response.status === 401 && client) {
+        console.warn("[Auth] Received 401 from API. Attempting token refresh...");
+        try {
+            const { data: refreshData, error: refreshError } = await client.auth.refreshSession();
+            if (!refreshError && refreshData?.session) {
+                currentSession = refreshData.session;
+                const retryHeaders = { ...(options.headers || {}) };
+                retryHeaders['Authorization'] = `Bearer ${currentSession.access_token}`;
+                response = await fetch(url, { ...options, headers: retryHeaders });
+            } else {
+                console.warn("[Auth] Session refresh unsuccessful after 401. Re-authenticating.");
+                currentSession = null;
+                updateAuthUI(false);
+            }
+        } catch (refreshErr) {
+            console.warn("[Auth] Token refresh error:", refreshErr.message);
+            currentSession = null;
+            updateAuthUI(false);
+        }
+    }
+    
+    return response;
 }

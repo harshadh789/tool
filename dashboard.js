@@ -12,16 +12,19 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Update profile
     try {
         const meRes = await fetchWithAuth('/api/me');
-        if (meRes.success && meRes.user) {
-            currentUserRole = meRes.user.role;
-            const roleEl = document.getElementById('dash_user_role');
-            const emailEl = document.getElementById('dash_user_email');
-            const teamNav = document.getElementById('nav_team');
-            
-            if (roleEl) roleEl.innerText = meRes.user.role;
-            if (emailEl) emailEl.innerText = meRes.user.email;
-            if (teamNav && meRes.user.role === 'ADMIN') {
-                teamNav.style.display = 'block';
+        if (meRes.ok) {
+            const meData = await meRes.json();
+            if (meData.success && meData.user) {
+                currentUserRole = meData.user.role;
+                const roleEl = document.getElementById('dash_user_role');
+                const emailEl = document.getElementById('dash_user_email');
+                const teamNav = document.getElementById('nav_team');
+                
+                if (roleEl) roleEl.innerText = meData.user.role;
+                if (emailEl) emailEl.innerText = meData.user.email;
+                if (teamNav && meData.user.role === 'ADMIN') {
+                    teamNav.style.display = 'block';
+                }
             }
         }
     } catch (e) {

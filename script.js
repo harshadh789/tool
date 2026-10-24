@@ -936,6 +936,12 @@
                 
                 return; // Wait for login
             } else {
+                const overlay = document.getElementById('auth-overlay');
+                if (overlay) {
+                    overlay.style.display = 'none';
+                    overlay.style.opacity = '0';
+                    overlay.style.pointerEvents = 'none';
+                }
                 loadGlobals();
             }
         } else {
@@ -947,6 +953,12 @@
                 // Execution stops here. window.onLoginSuccess will call boot() later.
                 return;
             } else {
+                const overlay = document.getElementById('auth-overlay');
+                if (overlay) {
+                    overlay.style.display = 'none';
+                    overlay.style.opacity = '0';
+                    overlay.style.pointerEvents = 'none';
+                }
                 loadGlobals();
             }
         }
@@ -981,6 +993,12 @@
             document.getElementById('auth-overlay').style.display = 'flex';
             document.getElementById('auth-overlay').style.opacity = '1';
         } else {
+            const overlay = document.getElementById('auth-overlay');
+            if (overlay) {
+                overlay.style.display = 'none';
+                overlay.style.opacity = '0';
+                overlay.style.pointerEvents = 'none';
+            }
             loadGlobals();
             init();
         }
