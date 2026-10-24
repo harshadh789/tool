@@ -648,7 +648,77 @@
         }
       };
 
-      await html2pdf().set(opt).from(element).save();
+      // 1. Save changes to cloud silently to ensure database has canonical current version
+      let cloudSaveSucceeded = false;
+      if (quoteId && quoteId !== 'Draft') {
+        try {
+          const saveResult = await saveToCloud(true);
+          cloudSaveSucceeded = (saveResult === true);
+        } catch (saveErr) {
+          console.warn("Pre-export cloud save warning:", saveErr);
+          cloudSaveSucceeded = false;
+        }
+      }
+
+      // 2. Generate PDF bytes once
+      const worker = html2pdf().set(opt).from(element);
+      const pdfBlob = await worker.output('blob');
+
+      // 3. Trigger team's local file download using the exact generated Blob
+      const blobUrl = URL.createObjectURL(pdfBlob);
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.href = blobUrl;
+      downloadAnchor.download = finalFilename;
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      document.body.removeChild(downloadAnchor);
+      URL.revokeObjectURL(blobUrl);
+
+      // 4. Upload the exact same PDF bytes directly to private Supabase Storage via server-authorized signed URL
+      // Only proceed if pre-export cloud save succeeded, ensuring canonical version consistency
+      if (cloudSaveSucceeded && currentRecordVersion && quoteId && quoteId !== 'Draft') {
+        try {
+          const signRes = await fetchWithAuth(`/api/itineraries/${encodeURIComponent(quoteId)}/pdf/upload-url`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Itinerary-Version': String(currentRecordVersion)
+            },
+            body: JSON.stringify({ version: currentRecordVersion })
+          });
+          const signData = await signRes.json();
+          if (!signRes.ok || !signData.success || !signData.signedUrl) {
+            throw new Error(signData.error || 'Failed to authorize PDF upload.');
+          }
+
+          const uploadRes = await fetch(signData.signedUrl, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/pdf'
+            },
+            body: pdfBlob
+          });
+
+          if (!uploadRes.ok) {
+            throw new Error(`Direct storage upload failed with status ${uploadRes.status}`);
+          }
+
+          if (typeof showToast === 'function') {
+            showToast("✅ PDF downloaded & synced for customer share link!");
+          }
+        } catch (uploadErr) {
+          console.warn("Cloud PDF sync error:", uploadErr.message);
+          if (typeof showToast === 'function') {
+            showToast("⚠️ PDF downloaded locally, but customer download is not yet available.");
+          } else {
+            alert("PDF downloaded locally, but customer download is not yet available: " + uploadErr.message);
+          }
+        }
+      } else {
+        if (typeof showToast === 'function') {
+          showToast("ℹ️ PDF downloaded locally. Save itinerary to enable customer share link download.");
+        }
+      }
     } catch (err) {
       console.error("PDF generation error:", err);
       alert("Failed to generate PDF. Please try again.");
@@ -713,7 +783,7 @@
     const quoteId = getVal('i_quote').trim();
     if (!quoteId) {
        if(!isSilent) alert("Please enter a Quotation Number.");
-       return;
+       return false;
     }
 
     if(btn && !isSilent) {
@@ -732,7 +802,7 @@
                 btn.innerHTML = ogText;
                 btn.disabled = false;
             }
-            return;
+            return false;
         }
         if (valRes.warnings.length > 0 && !isSilent) {
             const proceed = confirm("There are missing fields, but you can save as Draft. Proceed?\n\nWarnings:\n" + valRes.warnings.join("\n"));
@@ -741,7 +811,7 @@
                     btn.innerHTML = ogText;
                     btn.disabled = false;
                 }
-                return;
+                return false;
             }
         }
     }
@@ -766,14 +836,14 @@
                 if (reloadNow) {
                     window.location.reload();
                 }
-                return;
+                return false;
             }
             throw new Error(data.error || "Failed to save to backend.");
         }
         
         if (isSilent) {
             if (isSilent !== 'auto') showToast("Draft Saved to Cloud!");
-            return; // Skip alerts and link generation for silent saves
+            return true; // Skip alerts and link generation for silent saves
         }
 
         if (currentStatus === 'Requested') {
@@ -794,7 +864,7 @@
                 }).catch(() => {
                     prompt("Saved! Copy secure customer link below:", customerUrl);
                 });
-                return;
+                return true;
             }
         } catch(shareErr) {
             console.warn("Could not automatically generate secure share link:", shareErr);
@@ -802,9 +872,11 @@
 
         showToast("Itinerary saved to cloud!");
         alert("Success! Itinerary saved to cloud.");
+        return true;
     } catch (e) {
       console.error("Error saving to cloud: ", e);
       if(!isSilent) alert("Error saving to cloud: " + (e.message || JSON.stringify(e)));
+      return false;
     } finally {
         if(btn && !isSilent) {
             btn.innerHTML = ogText;

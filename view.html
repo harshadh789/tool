@@ -593,7 +593,7 @@
   <header class="brand-nav">
     <img src="https://www.campfly.in/assets/logo-cropped.png" alt="Campfly" class="brand-logo" onerror="this.style.display='none'">
     <div class="nav-actions">
-      <button class="btn-pdf" id="btn-download-pdf" onclick="generateCustomerPDF()" style="display:none;">
+      <button class="btn-pdf" id="btn-download-pdf" onclick="downloadOfficialPDF()" style="display:none;">
         <i class="fa-solid fa-file-arrow-down"></i> Download PDF
       </button>
     </div>
@@ -1009,88 +1009,51 @@
       }
     }
 
-    async function generateCustomerPDF() {
-      const element = document.getElementById('itinerary-content');
-      if (!element) return;
-      const quoteId = (activeItinerary && (activeItinerary.quote_id || activeItinerary.id)) ? (activeItinerary.quote_id || activeItinerary.id) : 'Campfly_Trip';
-      
+    async function downloadOfficialPDF() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const token = urlParams.get('token');
+      if (!token) {
+        alert("Unable to download: Share token is missing.");
+        return;
+      }
+
       const downloadBtn = document.getElementById('btn-download-pdf');
       const originalBtnText = downloadBtn ? downloadBtn.innerHTML : '';
       if (downloadBtn) {
         downloadBtn.disabled = true;
-        downloadBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generating PDF...';
+        downloadBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Downloading PDF...';
       }
 
       try {
-        // 1. Ensure QR code canvas is rendered and cloned as a visible image
-        const qrEl = document.getElementById('c_upi_qr');
-        if (qrEl) {
-          const cvs = qrEl.querySelector('canvas');
-          let img = qrEl.querySelector('img');
-          if (cvs) {
-            try {
-              const dataUrl = cvs.toDataURL('image/png');
-              if (!img) {
-                img = document.createElement('img');
-                qrEl.appendChild(img);
-              }
-              img.src = dataUrl;
-              img.style.display = 'block';
-              img.style.width = '130px';
-              img.style.height = '130px';
-              img.style.margin = '0 auto';
-              img.setAttribute('alt', 'UPI Payment QR Code');
-            } catch(e) {
-              console.warn('QR canvas toDataURL error in customer view:', e);
-            }
-          }
+        const response = await fetch(`/api/public/itinerary/${encodeURIComponent(token)}/pdf`);
+        if (!response.ok) {
+          let errorMsg = "The official itinerary PDF is currently being finalized by your travel consultant. Please check back shortly or review the full details online.";
+          try {
+            const errData = await response.json();
+            if (errData && errData.error) errorMsg = errData.error;
+          } catch (_) {}
+          showToast("ℹ️ " + errorMsg);
+          alert(errorMsg);
+          return;
         }
 
-        // 2. Wait for all images inside container to decode/load
-        const images = Array.from(element.querySelectorAll('img'));
-        await Promise.all(images.map(img => {
-          if (img.complete && img.naturalHeight !== 0) return Promise.resolve();
-          return new Promise(resolve => {
-            img.onload = resolve;
-            img.onerror = resolve;
-            setTimeout(resolve, 1500);
-          });
-        }));
+        const blob = await response.blob();
+        const quoteId = (activeItinerary && (activeItinerary.quote_id || activeItinerary.id)) ? (activeItinerary.quote_id || activeItinerary.id) : 'Trip';
+        const filename = `Campfly_Itinerary_${quoteId}.pdf`;
 
-        // 3. Short reflow tick for layout stabilization
-        await new Promise(r => setTimeout(r, 100));
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
 
-        const opt = {
-          margin: [8, 8, 8, 8],
-          filename: `Campfly_Itinerary_${quoteId}.pdf`,
-          image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { 
-            scale: 2, 
-            useCORS: true, 
-            allowTaint: true,
-            logging: false,
-            letterRendering: true
-          },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-          pagebreak: { 
-            mode: ['avoid-all', 'css', 'legacy'],
-            avoid: [
-              '.hero-card',
-              '.specs-grid',
-              '.content-card',
-              '.hotel-item',
-              '.day-item',
-              '.price-box',
-              '.bank-box',
-              '.list-card'
-            ]
-          }
-        };
-
-        await html2pdf().set(opt).from(element).save();
-      } catch(e) {
-        console.error("PDF generation failed:", e);
-        alert("Failed to export PDF. Please try again.");
+        showToast("✅ Downloaded official Campfly Itinerary PDF!");
+      } catch (err) {
+        console.error("PDF download error:", err);
+        showToast("⚠️ Could not download PDF. Please try again or view online.");
       } finally {
         if (downloadBtn) {
           downloadBtn.disabled = false;

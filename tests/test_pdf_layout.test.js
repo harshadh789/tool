@@ -96,29 +96,29 @@ test('view.html specs-grid uses minmax(0, 1fr) and overflow-wrap anywhere to pre
   assert(viewHtml.includes('overflow-wrap: anywhere'), 'spec-val must wrap long quotation numbers');
 });
 
-// 6. QR Code canvas-to-image conversion and asset preloading in script.js
-test('script.js prepares QR code assets and waits for image loading before html2pdf export', () => {
+// 6. QR Code canvas-to-image conversion and single PDF generation in script.js
+test('script.js prepares QR code assets, waits for image loading, and generates PDF via html2pdf', () => {
   assert(scriptJs.includes('preparePdfAssets'), 'script.js must define preparePdfAssets function');
   assert(scriptJs.includes('toDataURL'), 'script.js must convert canvas to dataURL');
   assert(scriptJs.includes('img.style.width'), 'script.js must set explicit width on QR image');
   assert(scriptJs.includes('img.complete'), 'script.js must verify image completion before export');
-  assert(scriptJs.includes('html2pdf().set(opt).from(element).save()'), 'script.js must trigger html2pdf save');
+  assert(scriptJs.includes('html2pdf().set(opt).from(element)'), 'script.js must generate PDF from element with options');
+  assert(scriptJs.includes('output(\'blob\')'), 'script.js must extract PDF Blob for reuse');
+  assert(scriptJs.includes('/api/itineraries/'), 'script.js must upload generated PDF to backend');
 });
 
-// 7. QR Code canvas-to-image conversion and asset preloading in customer view.html
-test('view.html prepares QR code assets and awaits image completion before html2pdf export', () => {
-  assert(viewHtml.includes('c_upi_qr'), 'view.html must target customer UPI QR code element');
-  assert(viewHtml.includes('toDataURL'), 'view.html must convert QR canvas to dataURL');
-  assert(viewHtml.includes('img.complete'), 'view.html must wait for images to complete');
-  assert(viewHtml.includes('html2pdf().set(opt).from(element).save()'), 'view.html must trigger html2pdf save');
+// 7. Customer view.html downloads official team-generated PDF via secure share endpoint
+test('view.html downloads official team-generated PDF via secure token endpoint without duplicate client generation', () => {
+  assert(viewHtml.includes('/api/public/itinerary/'), 'view.html must call secure public itinerary PDF endpoint');
+  assert(viewHtml.includes('/pdf'), 'view.html must request PDF stream');
+  assert(!viewHtml.includes('html2pdf().set(opt).from(element).save()'), 'view.html must NOT contain duplicate client-side PDF generation');
+  assert(viewHtml.includes('downloadOfficialPDF'), 'view.html must define downloadOfficialPDF handler');
 });
 
-// 8. html2pdf options standardize A4 margins and multi-page break avoidance
+// 8. Editor html2pdf options standardize A4 margins and multi-page break avoidance
 test('PDF export configuration standardizes A4 portrait format and uniform margins [8, 8, 8, 8]', () => {
-  assert(scriptJs.includes("format: 'a4'") && scriptJs.includes("orientation: 'portrait'"));
-  assert(scriptJs.includes("margin: [8, 8, 8, 8]"));
-  assert(viewHtml.includes("format: 'a4'") && viewHtml.includes("orientation: 'portrait'"));
-  assert(viewHtml.includes("margin: [8, 8, 8, 8]"));
+  assert(scriptJs.includes("format: 'a4'") && scriptJs.includes("orientation: 'portrait'"), 'script.js must specify A4 portrait format');
+  assert(scriptJs.includes("margin: [8, 8, 8, 8]"), 'script.js must standardize uniform [8, 8, 8, 8] margins');
 });
 
 // 9. Preserves official Campfly bank and UPI details

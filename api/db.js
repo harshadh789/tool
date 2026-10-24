@@ -578,6 +578,262 @@ async function getItineraryByShareToken(token) {
     return filterCustomerItinerary(itinerary);
 }
 
+async function createItineraryPdfUploadUrl(quoteId, version, user, userRole) {
+    checkInit();
+
+    if (!quoteId || typeof quoteId !== 'string') {
+        const err = new Error("Invalid quote ID.");
+        err.statusCode = 400;
+        throw err;
+    }
+
+    if (!version || typeof version !== 'number') {
+        const err = new Error("Invalid version number.");
+        err.statusCode = 400;
+        throw err;
+    }
+
+    const existing = await getItinerary(quoteId, user, 'ADMIN');
+    if (!existing) {
+        const err = new Error(`Itinerary not found for quote ${quoteId}`);
+        err.statusCode = 404;
+        throw err;
+    }
+
+    if (userRole === 'SALES') {
+        if (existing.owner_id === null) {
+            const err = new Error("Legacy unassigned records cannot be updated by Sales. Contact an Administrator.");
+            err.statusCode = 403;
+            throw err;
+        }
+        if (existing.owner_id !== user.id) {
+            const err = new Error("Sales can only upload PDFs for their own itineraries.");
+            err.statusCode = 403;
+            throw err;
+        }
+    } else if (userRole !== 'ADMIN') {
+        const err = new Error("Unauthorized role for uploading itinerary PDF.");
+        err.statusCode = 403;
+        throw err;
+    }
+
+    if (existing.version !== version) {
+        const err = new Error(`Version mismatch: Database itinerary is at version ${existing.version}, but PDF was submitted for version ${version}. Please save the latest changes before exporting.`);
+        err.statusCode = 409;
+        throw err;
+    }
+
+    const storagePath = `${existing.id}/v${existing.version}.pdf`;
+
+    // Check if an official valid PDF already exists for this saved version
+    let existingPdfValid = false;
+    try {
+        const { data: fileData, error: dlErr } = await supabase.storage
+            .from('itinerary-pdfs')
+            .download(storagePath);
+        if (!dlErr && fileData) {
+            let buf;
+            if (Buffer.isBuffer(fileData)) {
+                buf = fileData;
+            } else if (typeof fileData.arrayBuffer === 'function') {
+                buf = Buffer.from(await fileData.arrayBuffer());
+            } else {
+                buf = Buffer.from(fileData);
+            }
+            if (buf && buf.length >= 50 && buf.length <= 10485760 && buf.subarray(0, 5).toString('ascii') === '%PDF-') {
+                existingPdfValid = true;
+            }
+        }
+    } catch (_) {
+        existingPdfValid = false;
+    }
+
+    if (existingPdfValid) {
+        const err = new Error(`An official PDF has already been published for version ${existing.version}. Existing document is preserved. To replace the document, save a new version in the editor.`);
+        err.statusCode = 409;
+        throw err;
+    }
+
+    // Only clear prior corrupted, invalid, or zero-byte file if present, ensuring the new signed upload URL is strictly single-use
+    await supabase.storage.from('itinerary-pdfs').remove([storagePath]);
+
+    const { data, error } = await supabase.storage
+        .from('itinerary-pdfs')
+        .createSignedUploadUrl(storagePath);
+
+    if (error || !data) {
+        throw new Error(`Storage signed-upload authorization failed: ${error ? error.message : 'No data returned'}`);
+    }
+
+    return {
+        quoteId: existing.quote_id,
+        itineraryId: existing.id,
+        version: existing.version,
+        path: storagePath,
+        signedUrl: data.signedUrl,
+        token: data.token
+    };
+}
+
+async function uploadItineraryPdf(quoteId, pdfBuffer, version, user, userRole) {
+    checkInit();
+
+    const existing = await getItinerary(quoteId, user, 'ADMIN');
+    if (!existing) {
+        const err = new Error(`Itinerary not found for quote ${quoteId}`);
+        err.statusCode = 404;
+        throw err;
+    }
+
+    if (userRole === 'SALES') {
+        if (existing.owner_id === null) {
+            const err = new Error("Legacy unassigned records cannot be updated by Sales. Contact an Administrator.");
+            err.statusCode = 403;
+            throw err;
+        }
+        if (existing.owner_id !== user.id) {
+            const err = new Error("Sales can only upload PDFs for their own itineraries.");
+            err.statusCode = 403;
+            throw err;
+        }
+    } else if (userRole !== 'ADMIN') {
+        const err = new Error("Unauthorized role for uploading itinerary PDF.");
+        err.statusCode = 403;
+        throw err;
+    }
+
+    if (existing.version !== version) {
+        const err = new Error(`Version mismatch: Database itinerary is at version ${existing.version}, but PDF was submitted for version ${version}. Please save the latest changes before exporting.`);
+        err.statusCode = 409;
+        throw err;
+    }
+
+    if (!Buffer.isBuffer(pdfBuffer) || pdfBuffer.length < 50 || pdfBuffer.subarray(0, 5).toString('ascii') !== '%PDF-') {
+        const err = new Error("Invalid payload: Body must be valid PDF binary data starting with %PDF-.");
+        err.statusCode = 400;
+        throw err;
+    }
+
+    if (pdfBuffer.length > 4194304) {
+        const err = new Error("PDF payload exceeds 4 MB direct server upload limit. Please use the direct signed-upload URL endpoint.");
+        err.statusCode = 413;
+        throw err;
+    }
+
+    const storagePath = `${existing.id}/v${existing.version}.pdf`;
+    const { data, error } = await supabase.storage
+        .from('itinerary-pdfs')
+        .upload(storagePath, pdfBuffer, {
+            contentType: 'application/pdf',
+            upsert: true
+        });
+
+    if (error) {
+        throw new Error(`Storage upload failed: ${error.message}`);
+    }
+
+    return {
+        quoteId: existing.quote_id,
+        itineraryId: existing.id,
+        version: existing.version,
+        path: storagePath,
+        size: pdfBuffer.length
+    };
+}
+
+async function getItineraryPdfByShareToken(token) {
+    checkInit();
+
+    if (!token || typeof token !== 'string' || token.trim().length < 32) {
+        const err = new Error("Invalid share token.");
+        err.statusCode = 404;
+        throw err;
+    }
+
+    const tokenHash = hashToken(token);
+
+    const { data: link, error: linkErr } = await supabase
+        .from('secure_share_links')
+        .select('id, itinerary_id, expires_at, created_at, revoked_at')
+        .eq('token_hash', tokenHash)
+        .single();
+
+    if (linkErr || !link) {
+        const err = new Error("Invalid or expired share link.");
+        err.statusCode = 404;
+        throw err;
+    }
+
+    const isRevoked = !!link.revoked_at || (link.expires_at && new Date(link.expires_at).getTime() === 0);
+    if (isRevoked) {
+        const err = new Error("This share link has been revoked.");
+        err.statusCode = 410;
+        throw err;
+    }
+
+    if (link.expires_at && new Date(link.expires_at) <= new Date()) {
+        const err = new Error("This share link has expired.");
+        err.statusCode = 410;
+        throw err;
+    }
+
+    const { data: itinerary, error: itinErr } = await supabase
+        .from('itineraries')
+        .select('id, quote_id, version')
+        .eq('id', link.itinerary_id)
+        .single();
+
+    if (itinErr || !itinerary) {
+        const err = new Error("Itinerary not found or no longer available.");
+        err.statusCode = 404;
+        throw err;
+    }
+
+    const storagePath = `${itinerary.id}/v${itinerary.version}.pdf`;
+    const { data: fileData, error: downloadErr } = await supabase.storage
+        .from('itinerary-pdfs')
+        .download(storagePath);
+
+    if (downloadErr || !fileData) {
+        const err = new Error("The official itinerary PDF for this version is currently being finalized by your travel consultant. Please check back shortly or review the full details online.");
+        err.statusCode = 404;
+        throw err;
+    }
+
+    let buffer;
+    if (Buffer.isBuffer(fileData)) {
+        buffer = fileData;
+    } else if (typeof fileData.arrayBuffer === 'function') {
+        buffer = Buffer.from(await fileData.arrayBuffer());
+    } else {
+        buffer = Buffer.from(fileData);
+    }
+
+    if (!buffer || buffer.length === 0) {
+        const err = new Error("The stored itinerary PDF is empty. Please contact your travel consultant to re-export the document.");
+        err.statusCode = 502;
+        throw err;
+    }
+
+    if (buffer.length > 10485760) {
+        const err = new Error("The stored itinerary PDF exceeds the 10 MB maximum allowed limit.");
+        err.statusCode = 502;
+        throw err;
+    }
+
+    if (buffer.length < 50 || buffer.subarray(0, 5).toString('ascii') !== '%PDF-') {
+        const err = new Error("The stored document is not a valid PDF file. Please contact your travel consultant to re-export the official document.");
+        err.statusCode = 502;
+        throw err;
+    }
+
+    return {
+        buffer,
+        quoteId: itinerary.quote_id,
+        version: itinerary.version
+    };
+}
+
 module.exports = {
     getItinerary,
     listItineraries,
@@ -588,6 +844,9 @@ module.exports = {
     listShareLinks,
     revokeShareLink,
     getItineraryByShareToken,
+    createItineraryPdfUploadUrl,
+    uploadItineraryPdf,
+    getItineraryPdfByShareToken,
     filterCustomerItinerary,
     hashToken,
     setClient
