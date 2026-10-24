@@ -219,10 +219,11 @@ app.post('/api/users', requireAuth, async (req, res) => {
         return res.status(400).json({ success: false, error: 'Invalid email or role.' });
     }
     try {
+        const appUrl = process.env.APP_URL || (process.env.NODE_ENV === 'production' || process.env.VERCEL 
+            ? 'https://tool-five-alpha.vercel.app' 
+            : 'http://localhost:3000');
         const inviteOptions = {
-            redirectTo: process.env.NODE_ENV === 'production' || process.env.VERCEL 
-                ? 'https://campfly-itinerary.vercel.app/dashboard.html'
-                : 'http://localhost:3000/dashboard.html'
+            redirectTo: `${appUrl}/dashboard.html`
         };
         const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, inviteOptions);
         if (inviteError) throw inviteError;
@@ -317,9 +318,10 @@ app.post('/api/users/:id/resend', requireAuth, async (req, res) => {
         }
         
         // Active account: Send Password Reset
-        const redirectUrl = process.env.NODE_ENV === 'production' || process.env.VERCEL 
-            ? 'https://campfly-itinerary.vercel.app/dashboard.html'
-            : 'http://localhost:3000/dashboard.html';
+        const appUrl = process.env.APP_URL || (process.env.NODE_ENV === 'production' || process.env.VERCEL 
+            ? 'https://tool-five-alpha.vercel.app' 
+            : 'http://localhost:3000');
+        const redirectUrl = `${appUrl}/dashboard.html`;
             
         const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(user.email, {
             redirectTo: redirectUrl
