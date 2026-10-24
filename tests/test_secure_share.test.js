@@ -23,6 +23,7 @@ process.env.PORT = 0;
 // In-memory mock database state
 let mockItineraries = new Map();
 let mockShareLinks = new Map();
+let mockStorage = new Map();
 
 const mockUsers = {
     'admin-token': { id: 'usr-admin-1', email: 'admin@campfly.in', role: 'ADMIN', is_active: true },
@@ -35,6 +36,7 @@ const mockUsers = {
 function resetMockDb() {
     mockItineraries.clear();
     mockShareLinks.clear();
+    mockStorage.clear();
 }
 
 function createMockSupabaseClient() {
@@ -151,6 +153,35 @@ function createMockSupabaseClient() {
             }
 
             return {};
+        },
+        storage: {
+            from: (bucket) => ({
+                upload: async (path, buffer, options) => {
+                    mockStorage.set(`${bucket}/${path}`, Buffer.from(buffer));
+                    return { data: { path }, error: null };
+                },
+                createSignedUploadUrl: async (path, options) => {
+                    return {
+                        data: {
+                            signedUrl: `https://mock-supabase.local/storage/v1/object/upload/sign/${bucket}/${path}?token=mock-token`,
+                            path,
+                            token: 'mock-token'
+                        },
+                        error: null
+                    };
+                },
+                remove: async (paths) => {
+                    if (Array.isArray(paths)) {
+                        for (const p of paths) mockStorage.delete(`${bucket}/${p}`);
+                    }
+                    return { data: {}, error: null };
+                },
+                download: async (path) => {
+                    const buf = mockStorage.get(`${bucket}/${path}`);
+                    if (!buf) return { data: null, error: { message: 'Object not found' } };
+                    return { data: buf, error: null };
+                }
+            })
         }
     };
 }
@@ -577,6 +608,358 @@ async function runTests() {
             .post(`/api/shares/${salesLinkId}/revoke`);
 
         assert.strictEqual(res.status, 401);
+    });
+
+    // ============================================================
+    // 9. OFFICIAL ITINERARY PDF UPLOAD & CUSTOMER DOWNLOAD (PHASE 3B.2)
+    // ============================================================
+    const mockPdfBytesV1 = Buffer.from('%PDF-1.4\n1 0 obj\n<< /Title (Campfly Bali Itinerary V1) >>\nendobj\ntrailer\n<<>>\n%%EOF');
+    const staffHashV1 = crypto.createHash('sha256').update(mockPdfBytesV1).digest('hex');
+
+    // Create an active share link for CMP-2026-SHARE-01 for PDF customer retrieval testing
+    let pdfShareToken = null;
+    let pdfShareLinkId = null;
+    const createPdfShareRes = await request(app)
+        .post('/api/itineraries/CMP-2026-SHARE-01/share')
+        .set('Authorization', 'Bearer admin-token')
+        .send({ expiresInDays: 30 });
+    pdfShareToken = createPdfShareRes.body.link.token;
+    pdfShareLinkId = createPdfShareRes.body.link.id;
+
+    await test("Staff (ADMIN) authorizes direct signed-upload URL for itinerary (v1)", async () => {
+        const res = await request(app)
+            .post('/api/itineraries/CMP-2026-SHARE-01/pdf/upload-url')
+            .set('Authorization', 'Bearer admin-token')
+            .send({ version: 1 });
+
+        assert.strictEqual(res.status, 200);
+        assert.strictEqual(res.body.success, true);
+        assert(res.body.signedUrl);
+        assert(res.body.signedUrl.includes('itin-uuid-1'));
+        assert.strictEqual(res.body.version, 1);
+        assert.strictEqual(res.body.quoteId, 'CMP-2026-SHARE-01');
+    });
+
+    await test("SALES can request signed-upload URL for own itinerary", async () => {
+        const res = await request(app)
+            .post('/api/itineraries/CMP-2026-SHARE-02/pdf/upload-url')
+            .set('Authorization', 'Bearer sales-1-token')
+            .send({ version: 1 });
+
+        assert.strictEqual(res.status, 200);
+        assert.strictEqual(res.body.success, true);
+        assert(res.body.signedUrl);
+    });
+
+    await test("SALES is blocked from requesting signed-upload URL for another agent's itinerary (403)", async () => {
+        const res = await request(app)
+            .post('/api/itineraries/CMP-2026-SHARE-02/pdf/upload-url')
+            .set('Authorization', 'Bearer sales-2-token')
+            .send({ version: 1 });
+
+        assert.strictEqual(res.status, 403);
+        assert(res.body.error.includes("Sales can only upload PDFs for their own itineraries"));
+    });
+
+    await test("OPS role is blocked from requesting signed-upload URL (403)", async () => {
+        const res = await request(app)
+            .post('/api/itineraries/CMP-2026-SHARE-01/pdf/upload-url')
+            .set('Authorization', 'Bearer ops-token')
+            .send({ version: 1 });
+
+        assert.strictEqual(res.status, 403);
+        assert(res.body.error.includes("Unauthorized role for uploading itinerary PDF"));
+    });
+
+    await test("Unauthenticated request for signed-upload URL is rejected (401)", async () => {
+        const res = await request(app)
+            .post('/api/itineraries/CMP-2026-SHARE-01/pdf/upload-url')
+            .send({ version: 1 });
+
+        assert.strictEqual(res.status, 401);
+    });
+
+    await test("Requesting signed-upload URL with mismatched version is rejected (409)", async () => {
+        const res = await request(app)
+            .post('/api/itineraries/CMP-2026-SHARE-01/pdf/upload-url')
+            .set('Authorization', 'Bearer admin-token')
+            .send({ version: 99 });
+
+        assert.strictEqual(res.status, 409);
+        assert(res.body.error.includes("Version mismatch"));
+    });
+
+    await test("Staff (ADMIN) uploads official PDF bytes for itinerary (v1)", async () => {
+        const res = await request(app)
+            .post('/api/itineraries/CMP-2026-SHARE-01/pdf')
+            .set('Authorization', 'Bearer admin-token')
+            .set('Content-Type', 'application/pdf')
+            .set('X-Itinerary-Version', '1')
+            .send(mockPdfBytesV1);
+
+        assert.strictEqual(res.status, 200);
+        assert.strictEqual(res.body.success, true);
+        assert.strictEqual(res.body.version, 1);
+        assert.strictEqual(res.body.quoteId, 'CMP-2026-SHARE-01');
+    });
+
+    await test("Customer downloads official PDF using share token and receives exact matching SHA-256 hash", async () => {
+        const res = await request(app)
+            .get(`/api/public/itinerary/${pdfShareToken}/pdf`);
+
+        assert.strictEqual(res.status, 200);
+        assert.strictEqual(res.headers['content-type'], 'application/pdf');
+        assert(res.headers['content-disposition'].includes('Campfly_Itinerary_CMP-2026-SHARE-01.pdf'));
+
+        const customerHash = crypto.createHash('sha256').update(res.body).digest('hex');
+        assert.strictEqual(customerHash, staffHashV1, "Customer downloaded bytes must match staff uploaded bytes exactly");
+    });
+
+    await test("SALES can upload official PDF for own itinerary", async () => {
+        const res = await request(app)
+            .post('/api/itineraries/CMP-2026-SHARE-02/pdf')
+            .set('Authorization', 'Bearer sales-1-token')
+            .set('Content-Type', 'application/pdf')
+            .set('X-Itinerary-Version', '1')
+            .send(mockPdfBytesV1);
+
+        assert.strictEqual(res.status, 200);
+        assert.strictEqual(res.body.success, true);
+    });
+
+    await test("SALES is blocked from uploading PDF for another agent's itinerary (403)", async () => {
+        const res = await request(app)
+            .post('/api/itineraries/CMP-2026-SHARE-02/pdf')
+            .set('Authorization', 'Bearer sales-2-token')
+            .set('Content-Type', 'application/pdf')
+            .set('X-Itinerary-Version', '1')
+            .send(mockPdfBytesV1);
+
+        assert.strictEqual(res.status, 403);
+        assert(res.body.error.includes("Sales can only upload PDFs for their own itineraries"));
+    });
+
+    await test("OPS role is blocked from uploading official PDF (403)", async () => {
+        const res = await request(app)
+            .post('/api/itineraries/CMP-2026-SHARE-01/pdf')
+            .set('Authorization', 'Bearer ops-token')
+            .set('Content-Type', 'application/pdf')
+            .set('X-Itinerary-Version', '1')
+            .send(mockPdfBytesV1);
+
+        assert.strictEqual(res.status, 403);
+        assert(res.body.error.includes("Unauthorized role for uploading itinerary PDF"));
+    });
+
+    await test("Unauthenticated PDF upload request is rejected (401)", async () => {
+        const res = await request(app)
+            .post('/api/itineraries/CMP-2026-SHARE-01/pdf')
+            .set('Content-Type', 'application/pdf')
+            .set('X-Itinerary-Version', '1')
+            .send(mockPdfBytesV1);
+
+        assert.strictEqual(res.status, 401);
+    });
+
+    await test("Upload with non-PDF payload or invalid magic bytes is rejected (400)", async () => {
+        const fakePdf = Buffer.from('NOT A REAL PDF FILE HEADER');
+        const res = await request(app)
+            .post('/api/itineraries/CMP-2026-SHARE-01/pdf')
+            .set('Authorization', 'Bearer admin-token')
+            .set('Content-Type', 'application/pdf')
+            .set('X-Itinerary-Version', '1')
+            .send(fakePdf);
+
+        assert.strictEqual(res.status, 400);
+        assert(res.body.error.includes("Body must be valid PDF binary data starting with %PDF-"));
+    });
+
+    await test("Upload with mismatched itinerary version is rejected (409)", async () => {
+        const res = await request(app)
+            .post('/api/itineraries/CMP-2026-SHARE-01/pdf')
+            .set('Authorization', 'Bearer admin-token')
+            .set('Content-Type', 'application/pdf')
+            .set('X-Itinerary-Version', '99')
+            .send(mockPdfBytesV1);
+
+        assert.strictEqual(res.status, 409);
+        assert(res.body.error.includes("Version mismatch"));
+    });
+
+    await test("When itinerary version increments to v2, customer requesting PDF receives 404 until v2 PDF is uploaded", async () => {
+        // Increment itinerary version in mock DB
+        const itin = mockItineraries.get('CMP-2026-SHARE-01');
+        itin.version = 2;
+
+        // Customer requests PDF for link pointing to this itinerary
+        const resStale = await request(app)
+            .get(`/api/public/itinerary/${pdfShareToken}/pdf`);
+
+        assert.strictEqual(resStale.status, 404);
+        assert(resStale.body.error.includes("The official itinerary PDF for this version is currently being finalized"));
+
+        // Staff uploads v2 PDF
+        const mockPdfBytesV2 = Buffer.from('%PDF-1.4\n1 0 obj\n<< /Title (Campfly Bali Itinerary V2 UPDATED) >>\nendobj\ntrailer\n<<>>\n%%EOF');
+        const staffHashV2 = crypto.createHash('sha256').update(mockPdfBytesV2).digest('hex');
+
+        const uploadRes = await request(app)
+            .post('/api/itineraries/CMP-2026-SHARE-01/pdf')
+            .set('Authorization', 'Bearer admin-token')
+            .set('Content-Type', 'application/pdf')
+            .set('X-Itinerary-Version', '2')
+            .send(mockPdfBytesV2);
+
+        assert.strictEqual(uploadRes.status, 200);
+
+        // Customer requests PDF again and gets v2
+        const resV2 = await request(app)
+            .get(`/api/public/itinerary/${pdfShareToken}/pdf`);
+
+        assert.strictEqual(resV2.status, 200);
+        const customerHashV2 = crypto.createHash('sha256').update(resV2.body).digest('hex');
+        assert.strictEqual(customerHashV2, staffHashV2, "Customer receives v2 PDF matching v2 staff upload");
+    });
+
+    await test("Customer PDF download with expired share token returns 410", async () => {
+        // Expire admin token
+        const link = Array.from(mockShareLinks.values()).find(l => l.token_hash === db.hashToken(pdfShareToken));
+        link.expires_at = new Date(Date.now() - 3600000).toISOString();
+
+        const res = await request(app)
+            .get(`/api/public/itinerary/${pdfShareToken}/pdf`);
+
+        assert.strictEqual(res.status, 410);
+        assert(res.body.error.includes("expired"));
+    });
+
+    await test("Customer PDF download with revoked share token returns 410", async () => {
+        // Create new active link
+        const createRes = await request(app)
+            .post('/api/itineraries/CMP-2026-SHARE-02/share')
+            .set('Authorization', 'Bearer sales-1-token')
+            .send({ expiresInDays: 30 });
+        const token = createRes.body.link.token;
+        const linkId = createRes.body.link.id;
+
+        // Revoke it
+        await request(app)
+            .post(`/api/shares/${linkId}/revoke`)
+            .set('Authorization', 'Bearer sales-1-token');
+
+        const res = await request(app)
+            .get(`/api/public/itinerary/${token}/pdf`);
+
+        assert.strictEqual(res.status, 410);
+        assert(res.body.error.includes("revoked"));
+    });
+
+    await test("Customer PDF download with non-existent token returns 404", async () => {
+        const res = await request(app)
+            .get('/api/public/itinerary/0000000000000000000000000000000000000000000000000000000000000000/pdf');
+
+        assert.strictEqual(res.status, 404);
+    });
+
+    await test("Direct server upload payload exceeding 4 MB limit is rejected (413)", async () => {
+        const bigHeader = Buffer.from('%PDF-1.4\n');
+        const bigPayload = Buffer.alloc(4.2 * 1024 * 1024, 0x20); // 4.2 MB
+        bigHeader.copy(bigPayload, 0);
+
+        const res = await request(app)
+            .post('/api/itineraries/CMP-2026-SHARE-01/pdf')
+            .set('Authorization', 'Bearer admin-token')
+            .set('Content-Type', 'application/pdf')
+            .set('X-Itinerary-Version', '1')
+            .send(bigPayload);
+
+        assert.strictEqual(res.status, 413);
+    });
+
+    await test("Replacement upload URL is refused with 409 when valid official PDF already exists, preserving customer download", async () => {
+        // Ensure share link is active
+        const link = Array.from(mockShareLinks.values()).find(l => l.token_hash === db.hashToken(pdfShareToken));
+        link.expires_at = new Date(Date.now() + 30 * 86400000).toISOString();
+
+        // Staff requests signed upload URL for CMP-2026-SHARE-01 (which already has valid official v2 PDF from Test 37)
+        const signRes = await request(app)
+            .post('/api/itineraries/CMP-2026-SHARE-01/pdf/upload-url')
+            .set('Authorization', 'Bearer admin-token')
+            .send({ version: 2 });
+
+        assert.strictEqual(signRes.status, 409);
+        assert(signRes.body.error.includes("already been published"));
+        assert(signRes.body.error.includes("Existing document is preserved"));
+
+        // Customer download STILL succeeds and delivers the untouched valid v2 PDF
+        const res = await request(app)
+            .get(`/api/public/itinerary/${pdfShareToken}/pdf`);
+
+        assert.strictEqual(res.status, 200);
+        assert.strictEqual(res.headers['content-type'], 'application/pdf');
+    });
+
+    await test("A failed replacement upload does not remove the previous valid official PDF", async () => {
+        // Attempt replacement upload with invalid/corrupt binary data to direct upload endpoint
+        const failRes = await request(app)
+            .post('/api/itineraries/CMP-2026-SHARE-01/pdf')
+            .set('Authorization', 'Bearer admin-token')
+            .set('Content-Type', 'application/pdf')
+            .set('X-Itinerary-Version', '2')
+            .send(Buffer.from('CORRUPT_PAYLOAD_NOT_A_PDF'));
+
+        assert.strictEqual(failRes.status, 400);
+
+        // Customer download STILL succeeds and delivers the untouched valid v2 PDF
+        const res = await request(app)
+            .get(`/api/public/itinerary/${pdfShareToken}/pdf`);
+
+        assert.strictEqual(res.status, 200);
+        assert.strictEqual(res.headers['content-type'], 'application/pdf');
+    });
+
+    await test("Direct signed-upload of invalid non-PDF bytes on unfinalized itinerary is rejected by customer download endpoint (502)", async () => {
+        // Increment itinerary to version 3 where no PDF exists yet
+        mockItineraries.get('CMP-2026-SHARE-01').version = 3;
+
+        const signRes = await request(app)
+            .post('/api/itineraries/CMP-2026-SHARE-01/pdf/upload-url')
+            .set('Authorization', 'Bearer admin-token')
+            .send({ version: 3 });
+
+        assert.strictEqual(signRes.status, 200);
+        assert(signRes.body.signedUrl);
+
+        // Simulate client uploading non-PDF / HTML / corrupted payload directly into storage path
+        mockStorage.set('itinerary-pdfs/itin-uuid-1/v3.pdf', Buffer.from('<html><body>Fake Corrupted HTML Payload</body></html>'));
+
+        // Customer attempts to download official PDF via share link
+        const res = await request(app)
+            .get(`/api/public/itinerary/${pdfShareToken}/pdf`);
+
+        assert.strictEqual(res.status, 502);
+        assert.strictEqual(res.headers['content-type'].includes('application/json'), true);
+        assert(res.body.error.includes("not a valid PDF file"));
+    });
+
+    await test("An invalid upload can be safely recovered without weakening authorization or exposing the bucket", async () => {
+        // Because itin-uuid-1/v3.pdf currently contains invalid HTML, createItineraryPdfUploadUrl permits generating a recovery URL
+        const recoverSignRes = await request(app)
+            .post('/api/itineraries/CMP-2026-SHARE-01/pdf/upload-url')
+            .set('Authorization', 'Bearer admin-token')
+            .send({ version: 3 });
+
+        assert.strictEqual(recoverSignRes.status, 200);
+        assert(recoverSignRes.body.signedUrl);
+
+        // Upload valid PDF to recover
+        mockStorage.set('itinerary-pdfs/itin-uuid-1/v3.pdf', mockPdfBytesV1);
+
+        // Customer attempts download again and receives valid PDF
+        const res = await request(app)
+            .get(`/api/public/itinerary/${pdfShareToken}/pdf`);
+
+        assert.strictEqual(res.status, 200);
+        assert.strictEqual(res.headers['content-type'], 'application/pdf');
     });
 
     console.log(`\n========================================`);

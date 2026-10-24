@@ -673,6 +673,73 @@ app.get('/api/customer/itinerary', async (req, res) => {
     }
 });
 
+// 5. Authenticated Staff: Authorize Direct Signed-Upload for Official PDF (bypasses Vercel 4.5 MB function limit)
+app.post('/api/itineraries/:id/pdf/upload-url', requireAuth, express.json(), async (req, res) => {
+    const quoteId = req.params.id;
+    if (!quoteId) return res.status(400).json({ success: false, error: 'Missing Quote ID.' });
+
+    const versionHeader = req.get('x-itinerary-version');
+    const version = req.body?.version ? parseInt(req.body.version, 10) : (versionHeader ? parseInt(versionHeader, 10) : null);
+    if (!version || isNaN(version)) {
+        return res.status(400).json({ success: false, error: 'Missing or invalid version. Provide { version } in JSON body or X-Itinerary-Version header.' });
+    }
+
+    try {
+        const result = await db.createItineraryPdfUploadUrl(quoteId, version, req.user, req.userRole);
+        return res.json({ success: true, message: 'Signed upload URL generated.', ...result });
+    } catch (err) {
+        console.error("Create PDF Signed Upload URL Error:", err.message);
+        const status = err.statusCode || (err.message.includes("not found") ? 404 : (err.message.includes("Unauthorized") || err.message.includes("only upload") || err.message.includes("only create")) ? 403 : err.message.includes("Version mismatch") ? 409 : 500);
+        return res.status(status).json({ success: false, error: err.message });
+    }
+});
+
+// 5b. Authenticated Staff: Bounded Server Direct Upload (Strictly <= 4 MB to stay within Vercel function limits)
+app.post('/api/itineraries/:id/pdf', requireAuth, express.raw({ type: 'application/pdf', limit: '4mb' }), async (req, res) => {
+    const quoteId = req.params.id;
+    if (!quoteId) return res.status(400).json({ success: false, error: 'Missing Quote ID.' });
+
+    if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+        return res.status(400).json({ success: false, error: 'Invalid or empty PDF payload. Content-Type must be application/pdf.' });
+    }
+
+    const versionHeader = req.get('x-itinerary-version');
+    const version = versionHeader ? parseInt(versionHeader, 10) : null;
+    if (!version || isNaN(version)) {
+        return res.status(400).json({ success: false, error: 'Missing or invalid X-Itinerary-Version header.' });
+    }
+
+    try {
+        const result = await db.uploadItineraryPdf(quoteId, req.body, version, req.user, req.userRole);
+        return res.json({ success: true, message: 'Official PDF stored for customer download.', ...result });
+    } catch(err) {
+        console.error("Upload Itinerary PDF Error:", err.message);
+        const status = err.statusCode || (err.message.includes("not found") ? 404 : (err.message.includes("Unauthorized") || err.message.includes("only upload")) ? 403 : err.message.includes("Version mismatch") ? 409 : 500);
+        return res.status(status).json({ success: false, error: err.message });
+    }
+});
+
+// 6. Public / Customer: Download Official Itinerary PDF by Share Token
+app.get('/api/public/itinerary/:token/pdf', async (req, res) => {
+    const token = req.params.token || req.query.token;
+    if (!token) return res.status(400).json({ success: false, error: 'Missing share token.' });
+
+    try {
+        const { buffer, quoteId, version } = await db.getItineraryPdfByShareToken(token);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="Campfly_Itinerary_${quoteId}.pdf"`);
+        res.setHeader('Content-Length', buffer.length);
+        return res.send(buffer);
+    } catch(err) {
+        console.error("Public Itinerary PDF Fetch Error:", err.message);
+        const status = err.statusCode || (err.message.includes("expired") || err.message.includes("revoked") ? 410 : 404);
+        return res.status(status).json({
+            success: false,
+            error: err.message
+        });
+    }
+});
+
 
 app.get('/api/listItineraries', requireAuth, async (req, res) => {
     const provider = process.env.STORAGE_PROVIDER;
