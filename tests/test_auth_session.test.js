@@ -48,6 +48,8 @@ function createAuthSandbox() {
     const listeners = [];
     let clientCreatedCount = 0;
     let currentMockSession = null;
+    let failGlobalSignOutOnce = false;
+    const signOutScopes = [];
     let customFetchHandler = null;
 
     const mockSupabaseClient = {
@@ -77,7 +79,13 @@ function createAuthSandbox() {
                 }
                 return { data: { session: null }, error: new Error("Invalid login credentials") };
             },
-            signOut: async () => {
+            signOut: async (options = {}) => {
+                const scope = options.scope || 'global';
+                signOutScopes.push(scope);
+                if (scope === 'global' && failGlobalSignOutOnce) {
+                    failGlobalSignOutOnce = false;
+                    return { error: new Error('Simulated global sign-out network failure') };
+                }
                 currentMockSession = null;
                 listeners.forEach(fn => fn('SIGNED_OUT', null));
                 return { error: null };
@@ -184,6 +192,8 @@ function createAuthSandbox() {
         getCurrentSession: () => vm.runInContext('currentSession', context),
         getClientCreatedCount: () => clientCreatedCount,
         setMockSession: (s) => { currentMockSession = s; },
+        failNextGlobalSignOut: () => { failGlobalSignOutOnce = true; },
+        getSignOutScopes: () => signOutScopes.slice(),
         getMockOverlay: () => mockOverlay,
         getLogs: () => logs,
         setFetchHandler: (fn) => { customFetchHandler = fn; }
@@ -352,6 +362,25 @@ function createAuthSandbox() {
         assert.strictEqual(sb.getCurrentSession(), null, "Session must be null after logout");
         const overlay = sb.getMockOverlay();
         assert.strictEqual(overlay.style.display, 'flex', "Overlay must be displayed after logout");
+    });
+
+    // --------------------------------------------------------------------------
+    // Additional logout recovery test: local session clearing after global sign-out fails
+    // --------------------------------------------------------------------------
+    await runAsyncTest("handleLogout clears persisted session after global sign-out error", async () => {
+        const sb = createAuthSandbox();
+        sb.setMockSession({ access_token: 'tok-logout-fallback', refresh_token: 'ref-logout-fallback', user: { id: 'u-out-fallback' } });
+        sb.failNextGlobalSignOut();
+
+        await sb.initAuth();
+        assert.ok(sb.getCurrentSession(), "Session active before logout");
+
+        await sb.handleLogout();
+
+        assert.strictEqual(sb.getCurrentSession(), null, "Session must be cleared after fallback");
+        assert.ok(sb.getSignOutScopes().includes('global'), "Should attempt normal global sign-out first");
+        assert.ok(sb.getSignOutScopes().includes('local'), "Should fall back to local sign-out when global fails");
+        assert.strictEqual(sb.getMockOverlay().style.display, 'flex', "Login overlay should appear after logout");
     });
 
     // --------------------------------------------------------------------------

@@ -10,6 +10,7 @@ let supabaseClient = null;
 let currentSession = null;
 let clientInitPromise = null;
 let authStateSubscription = null;
+let authStorageKey = null;
 let lastLoginHandledAt = 0;
 
 /**
@@ -63,6 +64,11 @@ async function getOrInitSupabaseClient() {
                 console.error("[Auth] Supabase client library not loaded.");
                 return null;
             }
+
+            // Match Supabase JS's default localStorage key so logout can verify and
+            // clear this project's persisted session if the Auth API is unreachable.
+            const projectRef = new URL(config.url).hostname.split('.')[0];
+            authStorageKey = `sb-${projectRef}-auth-token`;
 
             // Explicitly configure supported browser authentication options
             supabaseClient = supabase.createClient(config.url, config.key, {
@@ -228,15 +234,67 @@ async function handleLogin() {
  */
 async function handleLogout() {
     const client = await getOrInitSupabaseClient();
+    let sessionCleared = false;
+    let globalSignOutFailed = false;
+
     if (client) {
+        // First attempt a full server-side sign-out (the Supabase default).
+        // Inspect the returned error: Supabase commonly returns { error } rather
+        // than throwing, so ignoring this value can leave localStorage intact.
         try {
-            await client.auth.signOut();
+            const { error } = await client.auth.signOut();
+            if (error) {
+                globalSignOutFailed = true;
+                console.warn("[Auth] Global sign-out was not confirmed:", error.message);
+            }
         } catch (e) {
-            console.warn("[Auth] Sign out error:", e.message);
+            globalSignOutFailed = true;
+            console.warn("[Auth] Global sign-out request failed:", e.message || e);
+        }
+
+        // Verify persisted session state. If global sign-out failed or left the
+        // session behind, make a local sign-out attempt so this browser exits.
+        try {
+            const beforeVerify = await client.auth.getSession();
+            if (beforeVerify.error || beforeVerify.data?.session) {
+                const { error: localError } = await client.auth.signOut({ scope: 'local' });
+                if (localError) throw localError;
+            }
+
+            const verify = await client.auth.getSession();
+            if (verify.error) throw verify.error;
+            sessionCleared = !verify.data?.session;
+        } catch (e) {
+            console.warn("[Auth] SDK local sign-out verification failed:", e.message || e);
         }
     }
+
+    // Last-resort local cleanup only for this Supabase project's auth entry.
+    // Do not clear all localStorage keys or touch unrelated application data.
+    if (!sessionCleared && authStorageKey && typeof window !== 'undefined' && window.localStorage) {
+        try {
+            window.localStorage.removeItem(authStorageKey);
+            sessionCleared = window.localStorage.getItem(authStorageKey) === null;
+            if (!sessionCleared) {
+                console.error("[Auth] Persisted session could not be removed.");
+            }
+        } catch (e) {
+            console.error("[Auth] Local session cleanup failed:", e.message || e);
+        }
+    }
+
+    if (!sessionCleared) {
+        alert("Logout could not clear the saved session. Please check your connection and try again.");
+        return;
+    }
+
     currentSession = null;
     updateAuthUI(false);
+
+    if (globalSignOutFailed && typeof alert === 'function') {
+        alert("You are signed out on this browser. Campfly could not confirm sign-out from all sessions, so other devices may remain signed in until their sessions expire.");
+    }
+
     if (typeof window !== 'undefined') {
         if (!window.location.pathname.endsWith('index.html') && window.location.pathname !== '/') {
             window.location.href = 'index.html';
