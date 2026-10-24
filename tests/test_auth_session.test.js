@@ -173,6 +173,7 @@ function createAuthSandbox() {
         console: mockConsole,
         fetch: mockFetch,
         supabase: mockSupabaseModule,
+        URL: URL,
         setTimeout: setTimeout,
         clearTimeout: clearTimeout,
         prompt: () => 'newPassword123',
